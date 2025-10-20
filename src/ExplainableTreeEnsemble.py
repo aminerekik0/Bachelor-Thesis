@@ -5,6 +5,7 @@ from sklearn.tree import ExtraTreeRegressor ,DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error
 import shap
 from uci_datasets import Dataset
+import pandas as pd
 
 class ExplainableTreeEnsemble:
     """
@@ -17,8 +18,8 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="song", n_trees=100, max_depth=3,
-                 meta_estimators=50, meta_depth=5,
+    def __init__(self, dataset_name="3droad  ", n_trees=100, max_depth=3,
+                 meta_estimators=50, meta_depth=3,
                  lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
         self.n_trees = n_trees
@@ -48,10 +49,15 @@ class ExplainableTreeEnsemble:
         #TODO : get the x and y from a classification dataset
         data = Dataset(self.dataset_name)
         X, y = data.x.astype(np.float32), data.y.ravel()
+        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+        df_X = pd.DataFrame(X, columns=feature_names)
+        s_y = pd.Series(y, name='target')
+        combined_df = pd.concat([df_X, s_y], axis=1)
+        print(combined_df.head(10))
 
-        # Main splits
+        # splits
         X_train, X_temp, y_train, y_temp = train_test_split(
-            X, y, test_size=0.2, random_state=self.random_state
+            X, y, test_size=0.3, random_state=self.random_state
         )
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, random_state=self.random_state
@@ -72,8 +78,8 @@ class ExplainableTreeEnsemble:
         print("-------------creating the base Trees-------------- ")
         n_samples = self.X_train.shape[0]
         for i in range(self.n_trees):
-
-            indices = np.random.choice(n_samples, n_samples, replace=True)
+            subsample_ratio = 0.7
+            indices = np.random.choice(n_samples, int(subsample_ratio * n_samples), replace=True)
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
             n_features_subset = int(np.sqrt(n_features))
@@ -81,7 +87,9 @@ class ExplainableTreeEnsemble:
             tree = DecisionTreeRegressor(
                 max_depth=self.max_depth,
                 random_state=self.random_state+i ,
-                max_features = n_features_subset
+                max_features = n_features_subset ,
+                min_samples_split=np.random.randint(2, 10),
+                min_samples_leaf=np.random.randint(1, 10)
             )
 
 
@@ -95,10 +103,20 @@ class ExplainableTreeEnsemble:
             n_estimators=100,
             max_depth=2,
             max_features='sqrt',
-            random_state=42
+            random_state=42 ,
+            criterion = 'absolute_error'
         )
 
         rf_model.fit(self.X_train, self.y_train)
+        base_estimators = rf_model.estimators_
+        first_tree = base_estimators[0]
+        print(f"Type of estimator: {type(first_tree)}")
+        tree_params = first_tree.get_params()
+
+        print(f"  tree_Params: {tree_params}")
+        fifth_tree = base_estimators[4]
+        print(f"  second tree params: {fifth_tree.get_params()}")
+
 
         custom_preds = np.array([tree.predict(self.X_train) for tree in self.individual_trees])
         rf_preds = np.array([tree.predict(self.X_train) for tree in rf_model.estimators_])
@@ -162,7 +180,7 @@ class ExplainableTreeEnsemble:
             y_meta_pred = meta_model.predict(X_meta_eval)
 
             mse = mean_squared_error(self.y_eval_meta, y_meta_pred)
-            print(f"Meta-model MSE on evaluation set: {mse}")
+            print(f"--------Meta-model MSE on Eval-meta ------- \n: {mse}")
 
             self.meta_model = meta_model
             self.main_loss = mse
@@ -300,10 +318,10 @@ class ExplainableTreeEnsemble:
             "dataset": [self.dataset_name],
             "timestamp": [current_timestamp],
             "data_type": [self.data_type],
-            "main_loss": [self.main_loss],
-            "total_loss": [self.total_loss],
-            "full_metric": [self.full_metric],
-            "pruned_metric": [self.pruned_metric]
+            "meta_main_loss": [self.main_loss],
+            "meta_total_loss": [self.total_loss],
+            "full_ensemble_loss": [self.full_metric],
+            "pruned_ensemble_loss": [self.pruned_metric]
         })
 
 
