@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error
 import shap
 from uci_datasets import Dataset
 import pandas as pd
+import os
 
 class ExplainableTreeEnsemble:
     """
@@ -49,11 +50,6 @@ class ExplainableTreeEnsemble:
         #TODO : get the x and y from a classification dataset
         data = Dataset(self.dataset_name)
         X, y = data.x.astype(np.float32), data.y.ravel()
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        df_X = pd.DataFrame(X, columns=feature_names)
-        s_y = pd.Series(y, name='target')
-        combined_df = pd.concat([df_X, s_y], axis=1)
-        print(combined_df.head(10))
 
         # splits
         X_train, X_temp, y_train, y_temp = train_test_split(
@@ -74,7 +70,6 @@ class ExplainableTreeEnsemble:
     def train_base_trees(self):
         """Train M base trees using bootstrap sampling."""
         import numpy as np
-        import random
         print("-------------creating the base Trees-------------- ")
         n_samples = self.X_train.shape[0]
         for i in range(self.n_trees):
@@ -98,7 +93,8 @@ class ExplainableTreeEnsemble:
             tree.fit(X_sub, y_sub)
 
             self.individual_trees.append(tree)
-
+        # NB : This is only to see what is the difference between using my own custom tree building
+        # and using the Randomforest
         rf_model = RandomForestRegressor(
             n_estimators=100,
             max_depth=2,
@@ -209,8 +205,10 @@ class ExplainableTreeEnsemble:
     @staticmethod
     def prune_loss(shap_values, eps=1e-12):
         abs_shap = np.abs(shap_values)
+        # keepdims was necessary to-do the division with the same dimensions
         denom = abs_shap.sum(axis=1, keepdims=True) + eps
         p_hat = abs_shap / denom
+        # We should add eps because same trees have a 0 shap-values
         entropy = -np.sum(p_hat * np.log(p_hat + eps), axis=1)
         return np.mean(entropy)
 
@@ -221,7 +219,7 @@ class ExplainableTreeEnsemble:
         return float(np.sum(p_tilde ** 2))
 
     def explain_and_prune_regression(self, keep_ratio=0.25):
-        """Compute SHAP values and prune least important trees."""
+        """Compute SHAP values , losses and prune least important trees."""
 
         X_eval_meta_features = self._get_meta_features(self.X_eval_meta, self.individual_trees)
         explainer = shap.TreeExplainer(self.meta_model)
@@ -229,10 +227,6 @@ class ExplainableTreeEnsemble:
 
 
         self.shap_values = shap_values
-        print("\nSHAP Values (per tree)")
-        for i, shap_vec in enumerate(np.mean(np.abs(shap_values), axis=0)):
-           print(f"Tree_{i+1}: Mean(SHAP) = {shap_vec}")
-
 
         if self.data_type == "regression":
            main_loss = mean_squared_error(
@@ -307,8 +301,7 @@ class ExplainableTreeEnsemble:
         """
         Save all the results , and compare between the full ensemble and the pruned one .
         """
-        import pandas as pd
-        import os
+
         from datetime import datetime
 
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -316,7 +309,6 @@ class ExplainableTreeEnsemble:
 
         df = pd.DataFrame({
             "dataset": [self.dataset_name],
-            "timestamp": [current_timestamp],
             "data_type": [self.data_type],
             "meta_main_loss": [self.main_loss],
             "meta_total_loss": [self.total_loss],
