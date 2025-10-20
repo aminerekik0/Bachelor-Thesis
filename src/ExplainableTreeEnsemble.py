@@ -19,7 +19,7 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="3droad  ", n_trees=100, max_depth=3,
+    def __init__(self, dataset_name="keggundirected", n_trees=100, max_depth=2,
                  meta_estimators=50, meta_depth=3,
                  lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -78,7 +78,8 @@ class ExplainableTreeEnsemble:
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
             n_features_subset = int(np.sqrt(n_features))
-
+           #here I'm using random_state + i to get more randomness in choosing the features in each tree
+           # this helped me to have more diverse trees as usuall .
             tree = DecisionTreeRegressor(
                 max_depth=self.max_depth,
                 random_state=self.random_state+i ,
@@ -93,38 +94,18 @@ class ExplainableTreeEnsemble:
             tree.fit(X_sub, y_sub)
 
             self.individual_trees.append(tree)
-        # NB : This is only to see what is the difference between using my own custom tree building
-        # and using the Randomforest
-        rf_model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=2,
-            max_features='sqrt',
-            random_state=42 ,
-            criterion = 'absolute_error'
-        )
-
-        rf_model.fit(self.X_train, self.y_train)
-        base_estimators = rf_model.estimators_
-        first_tree = base_estimators[0]
-        print(f"Type of estimator: {type(first_tree)}")
-        tree_params = first_tree.get_params()
-
-        print(f"  tree_Params: {tree_params}")
-        fifth_tree = base_estimators[4]
-        print(f"  second tree params: {fifth_tree.get_params()}")
 
 
         custom_preds = np.array([tree.predict(self.X_train) for tree in self.individual_trees])
-        rf_preds = np.array([tree.predict(self.X_train) for tree in rf_model.estimators_])
 
         y_pred_custom = np.mean(custom_preds, axis=0)
-        y_pred_rf = np.mean(rf_preds, axis=0)
+
 
         mse_custom = mean_squared_error(self.y_train, y_pred_custom)
-        mse_rf = mean_squared_error(self.y_train, y_pred_rf)
+
         print(f"\n--- Performance Comparison ---")
         print(f"Custom Ensemble MSE: {mse_custom:.6f}")
-        print(f"Sklearn RandomForest MSE: {mse_rf:.6f}")
+
 
         import numpy as np
         import seaborn as sns
@@ -135,11 +116,6 @@ class ExplainableTreeEnsemble:
         plt.title("Pairwise Correlation of Custom Trees' Predictions")
         plt.show()
         print ("--------------random-Forest--------------------")
-
-        corr_rf = np.corrcoef(rf_preds)
-        sns.heatmap(corr_rf, cmap="coolwarm", center=0)
-        plt.title("Pairwise Correlation of Custom Trees' Predictions")
-        plt.show()
 
 
 
@@ -297,7 +273,7 @@ class ExplainableTreeEnsemble:
         return full_metric, pruned_metric
 
 
-    def save_results(self, filename="metrics_summary.csv"):
+    def save_results(self, filename="results_summary.csv"):
         """
         Save all the results , and compare between the full ensemble and the pruned one .
         """

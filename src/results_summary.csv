@@ -1,0 +1,11 @@
+dataset,data_type,meta_main_loss,meta_total_loss,full_ensemble_loss,pruned_ensemble_loss,descreption
+autompg,regression,6.5542,6.9139,8.0579,7.5940,this was done with 3 max_depth for each tree
+autompg,regression,5.6790,6.0128,10.2229,9.7128,this was done with 2 max_depth for each tree
+autompg,regression,8.0594,8.4278,6.2598,7.0305
+bike,regression,0.0396,0.3112,0.1114,0.0779
+bike,regression,0.1167,0.3335,0.4272,0.2752
+bike,regression,0.1877,0.4083,0.4328,0.3469
+bike,regression,0.0997,0.3749,0.4353,0.2724
+houseelectric,regression,0.0531,0.3383,0.2055,0.0903
+song,regression,0.2840,0.4919,0.3097,0.3039
+keggundirected,regression,0.0863,0.3432,0.1335,0.1234
