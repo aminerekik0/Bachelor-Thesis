@@ -19,8 +19,8 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="keggundirected", n_trees=100, max_depth=2,
-                 meta_estimators=50, meta_depth=3,
+    def __init__(self, dataset_name="song", n_trees=100, max_depth=5,
+                 meta_estimators=50, meta_depth=5,
                  lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
         self.n_trees = n_trees
@@ -37,6 +37,8 @@ class ExplainableTreeEnsemble:
         self.tree_importance = None
         self.data_type = data_type
         self._prepare_data()
+        self.n_features = None
+        self.n_samples = None
 
         self.main_loss = None
         self.total_loss = None
@@ -46,14 +48,13 @@ class ExplainableTreeEnsemble:
     def _prepare_data(self):
         """Load dataset and create train/validation/test splits."""
 
-
         #TODO : get the x and y from a classification dataset
         data = Dataset(self.dataset_name)
         X, y = data.x.astype(np.float32), data.y.ravel()
 
         # splits
         X_train, X_temp, y_train, y_temp = train_test_split(
-            X, y, test_size=0.3, random_state=self.random_state
+            X, y, test_size=0.2, random_state=self.random_state
         )
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, random_state=self.random_state
@@ -72,21 +73,21 @@ class ExplainableTreeEnsemble:
         import numpy as np
         print("-------------creating the base Trees-------------- ")
         n_samples = self.X_train.shape[0]
+        self.n_samples=n_samples
+        self.n_features= self.X_train.shape[1]
         for i in range(self.n_trees):
-            subsample_ratio = 0.7
-            indices = np.random.choice(n_samples, int(subsample_ratio * n_samples), replace=True)
+            indices = np.random.choice(n_samples, int(n_samples), replace=True)
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
-            n_features_subset = int(np.sqrt(n_features))
-           #here I'm using random_state + i to get more randomness in choosing the features in each tree
-           # this helped me to have more diverse trees as usuall .
+            n_features_subset = int(n_features/3)
+            #here I'm using random_state + i to get more randomness in choosing the features in each tree
+            # this helped me to have more diverse trees as usuall .
             tree = DecisionTreeRegressor(
                 max_depth=self.max_depth,
                 random_state=self.random_state+i ,
                 max_features = n_features_subset ,
-                min_samples_split=np.random.randint(2, 10),
-                min_samples_leaf=np.random.randint(1, 10)
             )
+
 
 
         #TODO : DecisionTreeClassifier
@@ -95,11 +96,19 @@ class ExplainableTreeEnsemble:
 
             self.individual_trees.append(tree)
 
+        rf = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=2,
+            max_features='sqrt',
+            random_state=42,
+        )
+        rf.fit(self.X_train, self.y_train)
 
         custom_preds = np.array([tree.predict(self.X_train) for tree in self.individual_trees])
+        rf_preds = np.array([tree.predict(self.X_train) for tree in rf.estimators_])
 
         y_pred_custom = np.mean(custom_preds, axis=0)
-
+        y_pred_rf = np.mean(rf_preds, axis=0)
 
         mse_custom = mean_squared_error(self.y_train, y_pred_custom)
 
@@ -116,7 +125,10 @@ class ExplainableTreeEnsemble:
         plt.title("Pairwise Correlation of Custom Trees' Predictions")
         plt.show()
         print ("--------------random-Forest--------------------")
-
+        corr_matrix = np.corrcoef(rf_preds)
+        sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
+        plt.title("Pairwise Correlation of rf's Predictions")
+        plt.show()
 
 
         print("----------base Trees created------------------- \n ")
@@ -138,6 +150,7 @@ class ExplainableTreeEnsemble:
           preds_train = X_meta_train[:, i]
           mse_train = mean_squared_error(self.y_train_meta, preds_train)
           print(f"Tree_{i+1}: Train MSE = {mse_train}")
+
 
         if self.data_type == "regression" :
             meta_model = RandomForestRegressor(
@@ -286,10 +299,13 @@ class ExplainableTreeEnsemble:
         df = pd.DataFrame({
             "dataset": [self.dataset_name],
             "data_type": [self.data_type],
+            "n_sampels" : [self.n_samples],
+            "n_features" : [self.n_features],
             "meta_main_loss": [self.main_loss],
             "meta_total_loss": [self.total_loss],
             "full_ensemble_loss": [self.full_metric],
-            "pruned_ensemble_loss": [self.pruned_metric]
+            "pruned_ensemble_loss": [self.pruned_metric] ,
+            "trees_max_Depth":[self.max_depth]
         })
 
 

@@ -1,11 +1,15 @@
-dataset,data_type,meta_main_loss,meta_total_loss,full_ensemble_loss,pruned_ensemble_loss,descreption
-autompg,regression,6.5542,6.9139,8.0579,7.5940,this was done with 3 max_depth for each tree
-autompg,regression,5.6790,6.0128,10.2229,9.7128,this was done with 2 max_depth for each tree
-autompg,regression,8.0594,8.4278,6.2598,7.0305
-bike,regression,0.0396,0.3112,0.1114,0.0779
-bike,regression,0.1167,0.3335,0.4272,0.2752
-bike,regression,0.1877,0.4083,0.4328,0.3469
-bike,regression,0.0997,0.3749,0.4353,0.2724
-houseelectric,regression,0.0531,0.3383,0.2055,0.0903
-song,regression,0.2840,0.4919,0.3097,0.3039
-keggundirected,regression,0.0863,0.3432,0.1335,0.1234
+dataset,data_type,n_sampels,n_features,meta_main_loss,meta_total_loss,full_ensemble_loss,pruned_ensemble_loss,trees_max_Depth
+3droad,regression,347899,3,255.2062,255.4826,302.0565,301.7626,2
+3droad,regression,347899,3,150.5979,150.8599,229.5702,213.5593,5
+slice,regression,42800,385,38.0231,38.3869,73.7127,70.9243,5
+slice,regression,42800,385,166.7515,167.0873,223.3306,214.3865,2
+kin40k,regression,32000,8,0.8250,1.1409,0.9817,0.9712,2
+kin40k,regression,32000,8,0.5730,0.9245,0.8773,0.8392,5
+bike,regression,13903,17,0.0095,0.2721,0.0680,0.0443,5
+bike,regression,13903,17,0.0911,0.3778,0.3245,0.2530,2
+tamielectric,regression,36624,3,0.0871,0.4297,0.0838,0.0837,2
+tamielectric,regression,36624,3,0.0870,0.4465,0.0838,0.0838,5
+tamielectric,regression,36624,3,0.0873,0.4591,0.0838,0.0838,5
+bike,regression,13903,17,0.0906,0.3868,0.3226,0.2385,2
+elevators,regression,13279,18,0.0329,0.3689,0.0381,0.0379,2
+elevators,regression,13279,18,0.0228,0.3899,0.0255,0.0250,5
