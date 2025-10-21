@@ -19,7 +19,7 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="song", n_trees=100, max_depth=5,
+    def __init__(self, dataset_name="3droad", n_trees=100, max_depth=5,
                  meta_estimators=50, meta_depth=5,
                  lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -79,10 +79,10 @@ class ExplainableTreeEnsemble:
             indices = np.random.choice(n_samples, int(n_samples), replace=True)
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
-            n_features_subset = int(n_features/3)
+            n_features_subset = int(np.sqrt(n_features))
             #here I'm using random_state + i to get more randomness in choosing the features in each tree
             # this helped me to have more diverse trees as usuall .
-            tree = DecisionTreeRegressor(
+            tree = ExtraTreeRegressor(
                 max_depth=self.max_depth,
                 random_state=self.random_state+i ,
                 max_features = n_features_subset ,
