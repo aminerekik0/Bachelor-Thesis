@@ -65,3 +65,16 @@ you can choose one of the following datasets : juste update the dataset_name in 
 | `wine`           |                   1599 |              11 |
 
 
+## 3. usage : 
+
+Install the required packages :
+
+```bash
+python pip install -r requirements.txt 
+```
+and install the datasets  : 
+
+```bash
+python -m pip install git+https://github.com/treforevans/uci_datasets.git
+```
+then run the script  
