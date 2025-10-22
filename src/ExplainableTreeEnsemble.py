@@ -19,7 +19,7 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="3droad", n_trees=100, max_depth=5,
+    def __init__(self, dataset_name="keggdirected", n_trees=200, max_depth=5,
                  meta_estimators=50, meta_depth=5,
                  lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -32,6 +32,8 @@ class ExplainableTreeEnsemble:
         self.random_state = random_state
 
         self.individual_trees = []
+        self.individual_trees1 = []
+        self.individual_trees2 = []
         self.meta_model = None
         self.shap_values = None
         self.tree_importance = None
@@ -76,65 +78,25 @@ class ExplainableTreeEnsemble:
         self.n_samples=n_samples
         self.n_features= self.X_train.shape[1]
         for i in range(self.n_trees):
-            indices = np.random.choice(n_samples, int(n_samples), replace=True)
+            indices = np.random.choice(n_samples, int(0.7*n_samples), replace=True)
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
             n_features_subset = int(np.sqrt(n_features))
             #here I'm using random_state + i to get more randomness in choosing the features in each tree
             # this helped me to have more diverse trees as usuall .
-            tree = ExtraTreeRegressor(
-                max_depth=self.max_depth,
+            trees = DecisionTreeRegressor(
+                max_depth=np.random.choice([2, 5 , 6, 9 , 10]),
                 random_state=self.random_state+i ,
                 max_features = n_features_subset ,
             )
 
+            trees.fit(X_sub, y_sub)
+            self.individual_trees.append(trees)
 
 
         #TODO : DecisionTreeClassifier
 
-            tree.fit(X_sub, y_sub)
-
-            self.individual_trees.append(tree)
-
-        rf = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=2,
-            max_features='sqrt',
-            random_state=42,
-        )
-        rf.fit(self.X_train, self.y_train)
-
-        custom_preds = np.array([tree.predict(self.X_train) for tree in self.individual_trees])
-        rf_preds = np.array([tree.predict(self.X_train) for tree in rf.estimators_])
-
-        y_pred_custom = np.mean(custom_preds, axis=0)
-        y_pred_rf = np.mean(rf_preds, axis=0)
-
-        mse_custom = mean_squared_error(self.y_train, y_pred_custom)
-
-        print(f"\n--- Performance Comparison ---")
-        print(f"Custom Ensemble MSE: {mse_custom:.6f}")
-
-
-        import numpy as np
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        print ("--------------my ensemble--------------------")
-        corr_matrix = np.corrcoef(custom_preds)
-        sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
-        plt.title("Pairwise Correlation of Custom Trees' Predictions")
-        plt.show()
-        print ("--------------random-Forest--------------------")
-        corr_matrix = np.corrcoef(rf_preds)
-        sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
-        plt.title("Pairwise Correlation of rf's Predictions")
-        plt.show()
-
-
-        print("----------base Trees created------------------- \n ")
-        print("----------training the base Trees--------------")
-        print(f"Created {len(self.individual_trees)} base trees.")
-
+            
     @staticmethod
     def _get_meta_features(X, trees):
         """Generate meta-features (tree predictions)."""
@@ -329,9 +291,11 @@ class ExplainableTreeEnsemble:
 
 
 if __name__ == "__main__":
-    model = ExplainableTreeEnsemble( data_type = "regression")
-    model.train_base_trees()
-    model.train_meta_model()
-    model.explain_and_prune_regression(keep_ratio=0.25)
-    model.evaluate()
-    model.save_results()
+  dataset_names=["3droad", "bike", "houseelectric" , "kin40k", "slice", "buzz" , "protein" , "tamielectric"]
+  for dataset in dataset_names :
+     model = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
+     model.train_base_trees()
+     model.train_meta_model()
+     model.explain_and_prune_regression(keep_ratio=0.25)
+     model.evaluate()
+     model.save_results()
