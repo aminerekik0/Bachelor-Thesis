@@ -19,9 +19,9 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name="keggdirected", n_trees=200, max_depth=5,
-                 meta_estimators=50, meta_depth=5,
-                 lambda_prune=0.1, lambda_div=0.02, random_state=42 , data_type = "regression"):
+    def __init__(self, dataset_name="keggdirected", n_trees=50, max_depth=5,
+                 meta_estimators=50, meta_depth=5,learning_rate = 0.05 ,
+                 lambda_prune=0.5, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
         self.n_trees = n_trees
         self.max_depth = max_depth
@@ -30,6 +30,7 @@ class ExplainableTreeEnsemble:
         self.LAMBDA1 = lambda_prune
         self.LAMBDA2 = lambda_div
         self.random_state = random_state
+        self.learning_rate = learning_rate
 
         self.individual_trees = []
         self.individual_trees1 = []
@@ -102,7 +103,7 @@ class ExplainableTreeEnsemble:
         """Generate meta-features (tree predictions)."""
         return np.column_stack([t.predict(X) for t in trees]).astype(np.float32)
 
-    def train_meta_model(self):
+    def train_meta_model_basic(self):
         """Train meta-model using meta-features as input."""
         X_meta_train = self._get_meta_features(self.X_train_meta, self.individual_trees)
         X_meta_eval = self._get_meta_features(self.X_eval_meta, self.individual_trees)
@@ -151,8 +152,6 @@ class ExplainableTreeEnsemble:
             self.meta_model = meta_model
             self.main_loss = acc
             return acc
-
-
     @staticmethod
     def prune_loss(shap_values, eps=1e-12):
         abs_shap = np.abs(shap_values)
@@ -168,6 +167,94 @@ class ExplainableTreeEnsemble:
         phi_bar = np.mean(np.abs(shap_values), axis=0)
         p_tilde = phi_bar / (np.sum(phi_bar) + eps)
         return float(np.sum(p_tilde ** 2))
+
+    def train_meta_model_advanced(self):
+        num_iter = 5
+        lambda_prune = self.LAMBDA1
+        lambda_div = self.LAMBDA2
+        learning_rate = self.learning_rate
+        num_leaves = 16
+        import lightgbm as lgb
+
+        X_meta_train = self._get_meta_features(self.X_train_meta, self.individual_trees)
+        X_meta_eval = self._get_meta_features(self.X_eval_meta, self.individual_trees)
+
+        lgb_train = lgb.Dataset(X_meta_train, label=self.y_train_meta)
+        lgb_eval = lgb.Dataset(X_meta_eval, label=self.y_eval_meta, reference=lgb_train)
+
+        params = {
+            "objective" : self.data_type ,
+            "metric" : "rmse" ,  #TODO : if statement for the classifiction datatype
+            "learning_rate" : learning_rate ,
+            "num_leaves" : num_leaves ,
+            "verbose" : -1 ,
+        }
+        loss_history = []
+        for iter in range(num_iter) :
+
+            print(f"\n ======= {iter+1}======")
+            # train the meta-model
+            meta_model = lgb.train(params , lgb_train)
+
+            # shap-values
+            explainer = shap.TreeExplainer(meta_model)
+            shap_values = np.array(explainer.shap_values(X_meta_train))
+            self.shap_values = shap_values
+
+            s = np.mean(np.abs(shap_values), axis=0)
+            s_norm = s / (np.sum(s) + 1e-8)
+            L_prune = np.mean((1 - s_norm)**2)
+
+            corr = np.corrcoef(shap_values.T)
+            corr[np.isnan(corr)] = 0.0
+            diversity_penalty = np.mean((corr - np.eye(len(s)))**2)
+            L_div = diversity_penalty
+
+            tot_loss = self.LAMBDA1 * L_prune + self.LAMBDA2 * L_div
+
+            loss_history.append({
+                "iter" : iter+1 ,
+                "L_prune" : L_prune ,
+                "L_div" : L_div ,
+                "total_loss" : tot_loss ,
+            })
+
+            print(f"L_prune : {L_prune} ,L_div : {L_div}  , total_loss : {tot_loss} ")
+
+
+            diversity_factor = np.mean(np.abs(corr), axis=1)
+
+            reward_importance = s_norm
+
+            norm_div_factor = diversity_factor / (np.max(diversity_factor) + 1e-8)
+            reward_diversity = 1.0 - norm_div_factor
+            combined_reward = (
+                    0.5 * reward_importance +
+                    lambda_div * reward_diversity
+            )
+
+            combined_reward = np.clip(combined_reward, 0, 2)
+
+            feature_penalty = {
+                f"tree_{j}": combined_reward[j] for j in range(len(s_norm))
+            }
+
+
+            params["feature_contri"] = combined_reward
+
+
+            importance_gain = meta_model.feature_importance(importance_type='gain')
+            feature_names = meta_model.feature_name()
+            print("\nFeature weighting check:")
+            for i, (f, gain, penalty) in enumerate(zip(feature_names, importance_gain, params["feature_contri"])):
+                print(f"Feature {i}: gain={gain:.4f}, penalty={penalty:.4f}")
+            corr_check = np.corrcoef(params["feature_contri"], importance_gain)[0, 1]
+            print(f"Correlation (penalty vs. gain): {corr_check:.3f}")
+
+
+        print("loss history ",loss_history)
+
+
 
     def explain_and_prune_regression(self, keep_ratio=0.25):
         """Compute SHAP values , losses and prune least important trees."""
@@ -291,11 +378,12 @@ class ExplainableTreeEnsemble:
 
 
 if __name__ == "__main__":
-  dataset_names=["3droad", "bike", "houseelectric" , "kin40k", "slice", "buzz" , "protein" , "tamielectric"]
+  dataset_names=["3droad"]
   for dataset in dataset_names :
      model = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
      model.train_base_trees()
-     model.train_meta_model()
-     model.explain_and_prune_regression(keep_ratio=0.25)
-     model.evaluate()
-     model.save_results()
+     #model.train_meta_model_basic()
+     model.train_meta_model_advanced()
+     #model.explain_and_prune_regression(keep_ratio=0.25)
+     #model.evaluate()
+     #model.save_results()
