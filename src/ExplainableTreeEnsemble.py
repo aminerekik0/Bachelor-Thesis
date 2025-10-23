@@ -167,9 +167,8 @@ class ExplainableTreeEnsemble:
         phi_bar = np.mean(np.abs(shap_values), axis=0)
         p_tilde = phi_bar / (np.sum(phi_bar) + eps)
         return float(np.sum(p_tilde ** 2))
-
-    def train_meta_model_advanced(self):
-        num_iter = 5
+def train_meta_model_advanced(self):
+        num_iter = 10
         lambda_prune = self.LAMBDA1
         lambda_div = self.LAMBDA2
         learning_rate = self.learning_rate
@@ -203,7 +202,7 @@ class ExplainableTreeEnsemble:
 
             s = np.mean(np.abs(shap_values), axis=0)
             s_norm = s / (np.sum(s) + 1e-8)
-            L_prune = np.mean((1 - s_norm)**2)
+            L_prune = self.prune_loss(self.shap_values)
 
             corr = np.corrcoef(shap_values.T)
             corr[np.isnan(corr)] = 0.0
@@ -229,9 +228,9 @@ class ExplainableTreeEnsemble:
             norm_div_factor = diversity_factor / (np.max(diversity_factor) + 1e-8)
             reward_diversity = 1.0 - norm_div_factor
             combined_reward = (
-                    0.5 * reward_importance +
+                    lambda_prune * reward_importance +
                     lambda_div * reward_diversity
-            )
+            ) 
 
             combined_reward = np.clip(combined_reward, 0, 2)
 
@@ -253,7 +252,6 @@ class ExplainableTreeEnsemble:
 
 
         print("loss history ",loss_history)
-
 
 
     def explain_and_prune_regression(self, keep_ratio=0.25):
