@@ -1,0 +1,10 @@
+dataset,data_type,n_samples,n_features,full_ensemble_loss,meta_main_loss,meta_prune_loss_final,meta_div_loss_final,pruned_ensemble_loss
+3droad,regression,347899,3,180.7432,92.0392,,,110.0469
+bike,regression,13903,17,0.0707,0.0106,,,0.0285
+slice,regression,42800,385,64.7158,14.9455,,,27.2955
+houseelectric,regression,1639424,11,0.0394,0.0047,,,0.0091
+3droad,regression,347899,3,188.8263,108.9703,,
+bike,regression,13903,17,0.1063,0.0517,,
+slice,regression,42800,385,66.1036,22.4890,,
+houseelectric,regression,1639424,11,0.0360,0.0175,,
+song,regression,412276,90,0.2742,0.2598,,
