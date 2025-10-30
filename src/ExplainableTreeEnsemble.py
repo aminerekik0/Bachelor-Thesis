@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import ExtraTreeRegressor ,DecisionTreeRegressor
-from sklearn.metrics import mean_squared_error , accuracy_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , accuracy_score
 import shap
 from uci_datasets import Dataset
 import pandas as pd
@@ -51,6 +51,11 @@ class ExplainableTreeEnsemble:
         self.total_loss = None
         self.full_metric = None
         self.pruned_metric = None
+
+        self.mse = None
+        self.rmse = None
+        self.mae = None
+        self.r2 =None
 
     def _prepare_data(self):
         """Load dataset and create train/validation/test splits."""
@@ -105,11 +110,15 @@ class ExplainableTreeEnsemble:
         """Evaluate full ensemble using stored test set."""
         tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
         self.full_preds = np.mean(tree_preds, axis=0)
+        if self.data_type == "regression" :
+           self.mse = mean_squared_error(self.y_test, self.full_preds)
+           self.rmse = np.sqrt(self.mse)
+           self.mae = mean_absolute_error(self.y_test, self.full_preds)
+           self.r2 = r2_score(self.y_test, self.full_preds)
+        else :
+            self.mse = accuracy_score(self.y_test, self.full_preds)
 
-        self.full_metric = mean_squared_error(self.y_test, self.full_preds) if self.data_type == "regression" \
-        else accuracy_score(self.y_test, self.full_preds)
-
-        return self.full_metric
+        return self.mse
 
 
 
@@ -118,7 +127,7 @@ if __name__ == "__main__":
   for dataset in dataset_names :
      workflow = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
      workflow.train_base_trees()
-     meta_model = BasicMetaModel()
+     meta_model = AdvancedMetaModel()
      meta_model.attach_to(workflow)
      meta_model.train()
      meta_model.evaluate()

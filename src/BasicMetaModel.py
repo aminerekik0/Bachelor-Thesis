@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import mean_squared_error, accuracy_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score ,accuracy_score
 import shap
 from .BaseMetaModel import BaseMetaModel
 
@@ -15,10 +15,14 @@ class BasicMetaModel(BaseMetaModel):
         self.shap_values = None
         self.pruned_trees = None
         self.tree_importance = None
-        self.rf_loss = None
+        self.main_loss = None
         self.total_loss = None
         self.full_metric = None
-        self.main_loss = None
+
+        self.mse = None
+        self.rmse = None
+        self.mae = None
+        self.r2 =None
 
     def train(self):
 
@@ -45,9 +49,13 @@ class BasicMetaModel(BaseMetaModel):
         y_pred = self.meta_model.predict(X_meta_eval)
 
         if self.data_type == "regression":
-            self.rf_loss = mean_squared_error(y_eval_meta, y_pred)
+            self.mse = mean_squared_error(y_eval_meta, y_pred)
+            self.rmse = np.sqrt(self.mse)
+            self.mae = mean_absolute_error(y_eval_meta, y_pred)
+            self.r2 = r2_score(y_eval_meta, y_pred)
+
         else:
-            self.rf_loss = accuracy_score(y_eval_meta, y_pred)
+            self.mse = accuracy_score(y_eval_meta, y_pred)
 
         explainer = shap.TreeExplainer(self.meta_model)
         self.shap_values = np.array(explainer.shap_values(X_meta_eval))
@@ -74,7 +82,7 @@ class BasicMetaModel(BaseMetaModel):
         # Compute total loss (main + prune + diversity)
         L_prune = self._prune_loss(self.shap_values)
         L_div = self._diversity_loss(self.shap_values)
-        self.total_loss = self.rf_loss + L_prune + L_div
+        self.total_loss = self.mse + L_prune + L_div
 
     def evaluate(self):
         """

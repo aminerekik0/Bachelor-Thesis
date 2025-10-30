@@ -2,7 +2,7 @@ import shap
 import lightgbm as lgb
 import numpy as np
 from .BaseMetaModel import BaseMetaModel
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.metrics import accuracy_score
 class AdvancedMetaModel(BaseMetaModel):
     def __init__(self, num_iter=10, learning_rate=0.05, num_leaves=16,
@@ -18,7 +18,10 @@ class AdvancedMetaModel(BaseMetaModel):
         self.meta_model = None
         self.prune_loss_final = None
         self.div_loss_final = None
-        self.main_loss = None
+        self.mse = None
+        self.rmse = None
+        self.mae = None
+        self.r2 =None
 
     def train(self):
 
@@ -130,15 +133,18 @@ class AdvancedMetaModel(BaseMetaModel):
         y_pred = self.meta_model.predict(X_test_meta)
 
         if self.data_type == "regression":
-           self.main_loss = mean_squared_error(y_test, y_pred)
+           self.mse = mean_squared_error(y_test, y_pred)
+           self.rmse = np.sqrt(self.mse)
+           self.mae = mean_absolute_error(y_test, y_pred)
+           self.r2 = r2_score(y_test, y_pred)
         else:
-           self.main_loss = accuracy_score(y_test, y_pred)
-           self.main_loss = accuracy_score(y_test, y_pred)
+           self.mse = accuracy_score(y_test, y_pred)
+
 
         print("full ensemble model main loss " , self.workflow.full_metric)
-        print("meta model main loss " , self.main_loss)
+        print("meta model main loss " , self.mse)
 
 
         print("prune loss " , self.prune_loss_final)
         print("div loss " , self.div_loss_final)
-        return self.main_loss
+        return self.mse , self.rmse , self.mae , self.r2
