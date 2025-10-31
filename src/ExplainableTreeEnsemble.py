@@ -123,11 +123,11 @@ class ExplainableTreeEnsemble:
 
 
 if __name__ == "__main__":
-  dataset_names=["3droad" , "bike" , "slice" ,  "houseelectric" , "song"]
+  dataset_names=["3droad"]
   for dataset in dataset_names :
      workflow = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
      workflow.train_base_trees()
-     meta_model = BasicMetaModel()
+     meta_model = AdvancedMetaModel()
      meta_model.attach_to(workflow)
      meta_model.train()
      meta_model.evaluate()
