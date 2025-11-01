@@ -6,7 +6,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.metrics import accuracy_score
 class AdvancedMetaModel(BaseMetaModel):
     def __init__(self, num_iter=10, learning_rate=0.05, num_leaves=16,
-                 lambda_prune=0.5, lambda_div=0.02, **kwargs):
+                 lambda_prune=0.6, lambda_div=0.1, **kwargs):
         super().__init__(**kwargs)
         self.num_iter = num_iter
         self.learning_rate = learning_rate
@@ -65,12 +65,8 @@ class AdvancedMetaModel(BaseMetaModel):
             shap_values = np.array(explainer.shap_values(X_meta_eval))
 
 
-            s = np.mean(np.abs(shap_values), axis=0)
-            s_norm = s / (np.sum(s) + 1e-8)
-
-
-            L_prune, reward_prune = self._prune_loss_weighted_L2(shap_values)
-            L_div, reward_div = self._diversity_loss_entropy_based(shap_values)
+            L_prune, reward_prune = self._prune_loss_entropy_based(shap_values)
+            L_div, reward_div = self._diversity_loss_corr_based(shap_values)
 
             tot_loss = lambda_prune * L_prune + lambda_div * L_div
 
@@ -88,8 +84,8 @@ class AdvancedMetaModel(BaseMetaModel):
 
 
             combined_reward = (
-                    lambda_prune * reward_prune +
-                    lambda_div * reward_div
+                    lambda_prune * reward_prune
+                    + lambda_div * reward_div
             )
 
             combined_reward = np.clip(combined_reward, 0, 2)
@@ -107,7 +103,7 @@ class AdvancedMetaModel(BaseMetaModel):
     def _prune_loss_entropy_based(shap_values):
         abs_shap = np.abs(shap_values)
         p_hat = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
-        reward = np.mean(p_hat * np.log(p_hat + 1e-12), axis=0)
+        reward = np.mean(p_hat, axis=0)
         return -np.mean(np.sum(p_hat * np.log(p_hat + 1e-12), axis=1)) , reward
     @staticmethod
     def _prune_loss_weighted_L1(shap_values):
@@ -136,7 +132,7 @@ class AdvancedMetaModel(BaseMetaModel):
         abs_shap = np.abs(shap_values)
         p = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
         entropy_loss = -(p * np.log(p +1e-8)).sum(axis=1).mean()
-        reward = 1.0 - np.mean(p * np.log(p + 1e-12), axis=0)
+        reward = 1 - np.mean(p * np.log(p + 1e-12), axis=0)
         return entropy_loss , reward
     @staticmethod
     def _diversity_loss_cov_based(shap_values):
@@ -144,14 +140,17 @@ class AdvancedMetaModel(BaseMetaModel):
         cov_matrix = np.cov(shap_values.T)
         cov_matrix[np.isnan(cov_matrix)] = 0.0
         off_diag_sq_sum = np.sum(np.triu(cov_matrix, k=1)**2) * 2
-        reward = 1.0 - (np.sum(np.abs(cov_matrix), axis=1) / np.sum(np.abs(cov_matrix))) #TODO : check sum or mean ?
+        mean_abs_cov_per_tree = np.mean(np.abs(cov_matrix), axis=1)
+        max_mean_cov = np.max(mean_abs_cov_per_tree)
+        reward = 1 -mean_abs_cov_per_tree / (max_mean_cov + 1e-12)
         return off_diag_sq_sum / (M**2 - M + 1e-12) , reward
     @staticmethod
     def _diversity_loss_corr_based(shap_values):
         s = np.mean(np.abs(shap_values), axis=0)
         corr = np.corrcoef(shap_values.T)
         corr[np.isnan(corr)] = 0.0
-        reward = 1.0 - (np.sum(np.abs(corr), axis=1) / np.sum(np.abs(corr))) #TODO : check sum or mean ?
+        mean_abs_corr = np.mean(np.abs(corr), axis=1)
+        reward = 1.0 - mean_abs_corr / (np.max(mean_abs_corr) + 1e-12 )
         return np.mean((corr - np.eye(len(s)))**2) , reward
 
 
@@ -165,12 +164,12 @@ class AdvancedMetaModel(BaseMetaModel):
         y_pred = self.meta_model.predict(X_test_meta)
 
         if self.data_type == "regression":
-           self.mse = mean_squared_error(y_test, y_pred)
-           self.rmse = np.sqrt(self.mse)
-           self.mae = mean_absolute_error(y_test, y_pred)
-           self.r2 = r2_score(y_test, y_pred)
+            self.mse = mean_squared_error(y_test, y_pred)
+            self.rmse = np.sqrt(self.mse)
+            self.mae = mean_absolute_error(y_test, y_pred)
+            self.r2 = r2_score(y_test, y_pred)
         else:
-           self.mse = accuracy_score(y_test, y_pred)
+            self.mse = accuracy_score(y_test, y_pred)
 
 
         print("full ensemble model main loss " , self.workflow.full_metric)
