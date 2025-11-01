@@ -68,7 +68,6 @@ class AdvancedMetaModel(BaseMetaModel):
          num_leaves = self.num_leaves 
 
 
-         # --- Get n_trees --- 
 
          n_trees = len(self.workflow.individual_trees) 
 
@@ -114,14 +113,12 @@ class AdvancedMetaModel(BaseMetaModel):
          params_optimized = params.copy() 
 
 
-         # Train initial model 
 
          self.model = lgb.train(params, lgb_train) 
 
          self.meta_model = self.model 
 
 
-         # --- Initialize rewards for the *first* iteration (neutral: 1.0) --- 
 
          current_rewards_for_training = np.ones(n_trees) 
 
@@ -131,21 +128,17 @@ class AdvancedMetaModel(BaseMetaModel):
              print(f"\n ======= Iteration {iter+1} / {num_iter} ======") 
 
 
-             # --- 1. Train Normal Model (Control Group) ---
              lambda_prune_iter = self.lambda_prune
 
              self.model = lgb.train(params, lgb_train ) 
 
 
-             # --- 2. Train Optimized Model (Experimental Group) --- 
 
-
-             # 2a. Set feature_contri using rewards from *previous* loop 
 
              params_optimized["feature_contri"] = current_rewards_for_training.tolist() 
 
 
-             # 2b. Train the model 
+
 
              self.meta_model = lgb.train(params_optimized, 
 
@@ -154,15 +147,11 @@ class AdvancedMetaModel(BaseMetaModel):
                                          ) 
 
 
-             # --- 3. ANALYSIS OF THIS ITERATION --- 
-
-
-             # 3a. Get Gain: The *result* of training with 'current_rewards_for_training' 
 
              gains = self.meta_model.feature_importance(importance_type='gain') 
 
 
-             # 3b. Calculate New Rewards: The *input* for the *next* iteration 
+
 
              explainer = shap.TreeExplainer(self.meta_model) 
 
@@ -174,7 +163,6 @@ class AdvancedMetaModel(BaseMetaModel):
              L_div, reward_div = self._diversity_loss_corr_based(shap_values)
 
 
-             # Log losses 
 
              tot_loss = lambda_prune_iter * L_prune + lambda_div * L_div
 
@@ -194,7 +182,7 @@ class AdvancedMetaModel(BaseMetaModel):
              self.div_loss_final = L_div 
 
 
-             # Calculate the new reward vector 
+
 
              new_rewards_for_next_iter = (
 
@@ -207,7 +195,6 @@ class AdvancedMetaModel(BaseMetaModel):
              new_rewards_for_next_iter = np.clip(new_rewards_for_next_iter, 0, 2)
 
 
-             # --- 4. PRINT THE LOG TABLE --- 
 
              print(f"\n--- Analysis for Iteration {iter+1} (Sorted by Gain) ---") 
 
@@ -216,12 +203,11 @@ class AdvancedMetaModel(BaseMetaModel):
              print("-" * 59) 
 
 
-             # Sort by gain to see the most important trees 
 
              sorted_indices = np.argsort(gains)[::-1] 
 
 
-             for k in sorted_indices[:100]: # Print top 15 trees
+             for k in sorted_indices[:100]:
 
                  reward_in = current_rewards_for_training[k] 
 
@@ -232,7 +218,6 @@ class AdvancedMetaModel(BaseMetaModel):
                  print(f"T_{k:<4} | {reward_in:<15.4f} | {gain_out:<15.1f} | {reward_out:<17.4f}") 
 
 
-             # 5. --- Update rewards for the next loop --- 
 
              current_rewards_for_training = new_rewards_for_next_iter 
 
@@ -289,28 +274,20 @@ class AdvancedMetaModel(BaseMetaModel):
 
      @staticmethod
      def _diversity_loss_global(shap_values):
-         # 1. Get average absolute SHAP
          s = np.mean(np.abs(shap_values), axis=0)
 
-         # 2. Normalize so they sum to 1
          s_norm = s / (np.sum(s) + 1e-8)
 
-         # 3. Calculate loss (global concentration)
          global_loss = float(np.sum(s_norm ** 2))
 
-         # --- 4. Calculate REWARDS ---
-         
-         # Find the importance threshold for the bottom 30% of trees
+
          low_thresh = np.percentile(s_norm, 30)
 
-         # Default reward is 0 (for the trees we want to prune)
          reward = np.zeros_like(s_norm)
          
-         # Identify trees that are *above* the pruning threshold
          useful_trees_mask = (s_norm > low_thresh)
          
-         # For these useful trees, apply the diversity reward.
-         # This reward is (1 - concentration), promoting diversity among them.
+
          reward[useful_trees_mask] = 1.0 - s_norm[useful_trees_mask]**2
 
          return global_loss, reward
@@ -349,41 +326,27 @@ class AdvancedMetaModel(BaseMetaModel):
 
      @staticmethod
      def _diversity_loss_corr_based(shap_values):
-         # 1. Get average absolute SHAP (for importance)
          s = np.mean(np.abs(shap_values), axis=0)
          
-         # 2. Normalize SHAP to get an importance score (sums to 1)
          s_norm = s / (np.sum(s) + 1e-8)
 
-         # 3. Calculate the correlation matrix (for diversity)
          M = shap_values.shape[1]
          corr = np.corrcoef(shap_values.T)
          corr[np.isnan(corr)] = 0.0
 
-         # 4. Calculate the base diversity reward (for *all* trees)
-         # diversity_factor = how correlated a tree is (on avg) with all others
          diversity_factor = np.mean(np.abs(corr), axis=1)
-         
-         # reward_base = 1.0 - normalized_correlation (high reward for unique trees)
-         # Added 1e-12 for numerical stability
+
          reward_base = 1.0 - (diversity_factor / (np.max(diversity_factor) + 1e-12))
 
-         # --- 5. Apply the 30th Percentile Threshold ---
-         
-         # Find the importance threshold for the bottom 30% of trees
-         low_thresh = np.percentile(s_norm, 30)
+         low_thresh = np.percentile(s_norm, 45)
 
-         # Default reward is 0 (for the trees we want to prune)
          reward = np.zeros_like(s_norm)
          
-         # Identify trees that are *above* the pruning threshold
+
          useful_trees_mask = (s_norm > low_thresh)
-         
-         # Only apply the diversity reward to these "useful" trees
+
          reward[useful_trees_mask] = reward_base[useful_trees_mask]
-         
-         # --- 6. Calculate the Loss Function ---
-         # Loss = mean squared error from a perfect identity matrix (no correlation)
+
          loss = np.mean((corr - np.eye(M))**2)
 
          return loss, reward
