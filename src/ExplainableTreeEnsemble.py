@@ -9,6 +9,7 @@ import pandas as pd
 import os
 from src.AdvancedMetaModel import AdvancedMetaModel
 from src.BasicMetaModel import BasicMetaModel
+from src.AdvancedMetaModelSecond import AdvancedMetaModelSecond
 
 
 
@@ -23,7 +24,7 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name, n_trees=200, max_depth=5,
+    def __init__(self, dataset_name, n_trees=50, max_depth=5,
                  meta_estimators=50, meta_depth=5,learning_rate = 0.05 ,
                  lambda_prune=0.5, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -123,7 +124,7 @@ class ExplainableTreeEnsemble:
 
 
 if __name__ == "__main__":
-  dataset_names=["3droad"]
+  dataset_names=["3droad" , "bike" , "keggundirected" , "keggdirected" ,"slice"]
   for dataset in dataset_names :
      workflow = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
      workflow.train_base_trees()

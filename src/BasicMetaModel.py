@@ -19,6 +19,7 @@ class BasicMetaModel(BaseMetaModel):
         self.total_loss = None
         self.full_metric = None
 
+        self.pruned_ensemble_mse = None
         self.mse = None
         self.rmse = None
         self.mae = None
@@ -94,11 +95,11 @@ class BasicMetaModel(BaseMetaModel):
 
         # Pruned ensemble
         pruned_preds = np.mean(np.vstack([t.predict(X_test) for t in self.pruned_trees]), axis=0)
-        self.main_loss = mean_squared_error(y_test, pruned_preds) if self.data_type == "regression"\
+        self.pruned_ensemble_mse = mean_squared_error(y_test, pruned_preds) if self.data_type == "regression"\
             else accuracy_score(y_test, pruned_preds)
 
         print ("full_metric" , self.workflow.full_metric)
-        print ("pruned_metric", self.main_loss)
+        print ("pruned_metric", self.pruned_ensemble_mse)
 
         return self.full_metric, self.main_loss
     @staticmethod

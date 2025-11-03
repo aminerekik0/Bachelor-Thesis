@@ -35,7 +35,7 @@ class BaseMetaModel(ABC):
 
     # Default filename uses model class name + dataset
         if filename is None:
-           filename = f"{self.__class__.__name__}3.0_results.csv"
+           filename = f"{self.__class__.__name__}_results.csv"
 
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -45,12 +45,7 @@ class BaseMetaModel(ABC):
         "n_samples": [self.workflow.n_samples],
         "n_features": [self.workflow.n_features],
         "full_ensemble_mse": [getattr(self.workflow, 'mse', None)],
-        "full_ensemble_mae": [getattr(self.workflow, 'mae', None)],
-        "normal model mse " :[getattr(self, 'normal_model_mse', None)],
-        "meta_mse": [getattr(self, 'mse', None)],
-        "meta_mae": [getattr(self, 'mae', None)],
-        "meta_prune_loss_final": [getattr(self, 'prune_loss_final', None)],
-        "meta_div_loss_final": [getattr(self, 'div_loss_final', None)],
+        "pruned ensemble mse" :[getattr(self, 'pruned_ensemble_mse', None)] ,
         "created" : current_timestamp
     })
 

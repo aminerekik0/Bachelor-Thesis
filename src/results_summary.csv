@@ -1,9 +1,0 @@
-dataset,data_type,n_sampels,n_features,meta_main_loss,meta_total_loss,full_ensemble_loss,pruned_ensemble_loss
-3droad,regression,347899,3,81.8330,82.0609,172.8943,109.7939
-bike,regression,13903,17,0.0077,0.3023,0.0883,0.0215
-houseelectric,regression,1639424,11,0.0040,0.1921,0.0450,0.0190
-kin40k,regression,32000,8,0.3940,0.7299,0.7810,0.5928
-slice,regression,42800,385,11.2008,11.4909,69.2074,24.1485
-buzz,regression,466600,77,0.2295,0.5586,0.2399,0.2249
-protein,regression,36584,9,0.2720,0.6060,0.3484,0.2704
-tamielectric,regression,36624,3,0.0870,0.4962,0.0839,0.0842
