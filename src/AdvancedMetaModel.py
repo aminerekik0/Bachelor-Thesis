@@ -14,7 +14,7 @@ class AdvancedMetaModel(BaseMetaModel):
 
      def __init__(self, num_iter=5, learning_rate=0.1, num_leaves=16,
 
-                  lambda_prune=0.8, lambda_div=0.2, **kwargs):
+                  lambda_prune=0.6, lambda_div=0.2,keep_ratio=0.2 ,  **kwargs):
 
          super().__init__(**kwargs)
 
@@ -30,6 +30,7 @@ class AdvancedMetaModel(BaseMetaModel):
 
          self.loss_history = []
 
+         self.keep_ratio = keep_ratio
 
          self.meta_model = None
 
@@ -183,13 +184,13 @@ class AdvancedMetaModel(BaseMetaModel):
              )
 
 
-             new_rewards_for_next_iter = np.clip(new_rewards_for_next_iter, 0, 2)
+
 
 
 
              print(f"\n--- Analysis for Iteration {iter+1} (Sorted by Gain) ---")
 
-             print(f"{'Tree':<6} | {'Reward (Input)':<15} | {'shap_score (Result)':<15} | {'Reward (New Output)':<17}")
+             print(f"{'Tree'} | {'Reward (Input)'} | {'shap_score (Result)'} | {'Reward (New Output)'}")
 
              print("-" * 59)
 
@@ -223,16 +224,16 @@ class AdvancedMetaModel(BaseMetaModel):
          explainer = shap.TreeExplainer(self.meta_model)
          shap_values = np.array(explainer.shap_values(X_meta_eval))
 
-         # 2. Get global importance (mean abs SHAP across all eval samples)
+
          final_shap_scores = np.mean(np.abs(shap_values), axis=0)
 
-         # 3. Get all the trees
+
          all_trees = self.workflow.individual_trees
          n_trees_total = len(all_trees)
-         keep_ratio = 0.05
-         n_to_keep = 7
+         keep_ratio = self.keep_ratio
+         n_to_keep = max(1, int(len(final_shap_scores) * keep_ratio))
 
-         # 5. Sort trees by SHAP score (low-to-high)
+
          indices_sorted_by_shap = np.argsort(final_shap_scores)
 
          top_indices = indices_sorted_by_shap[-n_to_keep:]

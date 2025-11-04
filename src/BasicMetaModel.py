@@ -5,7 +5,7 @@ import shap
 from .BaseMetaModel import BaseMetaModel
 
 class BasicMetaModel(BaseMetaModel):
-    def __init__(self, n_estimators=50, max_depth=5, keep_ratio=0.25, **kwargs):
+    def __init__(self, n_estimators=50, max_depth=5, keep_ratio=0.15, **kwargs):
         super().__init__(**kwargs)
         self.n_estimators = n_estimators
         self.max_depth = max_depth
