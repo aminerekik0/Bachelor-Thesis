@@ -71,14 +71,14 @@ class BasicMetaModel(BaseMetaModel):
         Prune least important trees based on SHAP values and keep_ratio.
         """
         tree_importance = np.mean(np.abs(self.shap_values), axis=0)
-        sorted_indices = np.argsort(tree_importance)
-        self.tree_importance = tree_importance
+        normalized_shap = tree_importance / (np.max(tree_importance) + 1e-12)
 
-        total_trees = len(self.workflow.individual_trees)
-        keep_count = int(self.keep_ratio * total_trees)
+        self.tree_importance = normalized_shap
+        top_indices = np.where(normalized_shap > 0.3)[0]
 
-        trees_to_keep = sorted_indices[-keep_count:]
-        self.pruned_trees = [self.workflow.individual_trees[i] for i in trees_to_keep]
+
+        self.pruned_trees = [self.workflow.individual_trees[i] for i in top_indices]
+
 
         # Compute total loss (main + prune + diversity)
         L_prune = self._prune_loss(self.shap_values)

@@ -14,7 +14,7 @@ class AdvancedMetaModel(BaseMetaModel):
 
      def __init__(self, num_iter=5, learning_rate=0.1, num_leaves=16,
 
-                  lambda_prune=0.6, lambda_div=0.2,keep_ratio=0.2 ,  **kwargs):
+                  lambda_prune=0.2, lambda_div=0.1,keep_ratio=0.15 ,  **kwargs):
 
          super().__init__(**kwargs)
 
@@ -226,19 +226,14 @@ class AdvancedMetaModel(BaseMetaModel):
 
 
          final_shap_scores = np.mean(np.abs(shap_values), axis=0)
-
+         normalized_shap = final_shap_scores / (np.max(final_shap_scores) + 1e-12)
 
          all_trees = self.workflow.individual_trees
-         n_trees_total = len(all_trees)
          keep_ratio = self.keep_ratio
          n_to_keep = max(1, int(len(final_shap_scores) * keep_ratio))
 
-
-         indices_sorted_by_shap = np.argsort(final_shap_scores)
-
-         top_indices = indices_sorted_by_shap[-n_to_keep:]
+         top_indices = np.where(normalized_shap > 0.3)[0]
          print(f"\n===== Pruned Ensemble Selection =====")
-         print(f"Total Trees: {n_trees_total}, Keeping Top {n_to_keep} ({keep_ratio*100:.1f}%)\n")
          print(f"{'Tree Index':<12} | {'SHAP Importance':<15}")
          print("-" * 30)
 

@@ -24,7 +24,7 @@ class ExplainableTreeEnsemble:
         4. Prune unimportant trees based on SHAP importance.
         5. test the remaining trees on the test data
     """
-    def __init__(self, dataset_name, n_trees=500, max_depth=5,
+    def __init__(self, dataset_name, n_trees=200, max_depth=5,
                  meta_estimators=50, meta_depth=5,learning_rate = 0.05 ,
                  lambda_prune=0.5, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -124,11 +124,11 @@ class ExplainableTreeEnsemble:
 
 
 if __name__ == "__main__":
-  dataset_names=["3droad"]
+  dataset_names=["3droad" , "slice" ,"houseelectric" ]
 
-  lambda_prune_values = [0.2, 0.4, 0.6, 0.8]
-  lambda_div_values = [0.01, 0.02, 0.05 , 0.1]
-  keep_ratios = [0.1, 0.15, 0.2, 0.25]
+  lambda_prune_values = [0.2]
+  lambda_div_values = [ 0.1]
+  keep_ratios = [0.15]
   learning_rate =[0.05 , 0.1 , 0,2]
   num_iter =[3 , 7 , 10]
   results = []
@@ -142,35 +142,14 @@ if __name__ == "__main__":
          print(f"\n--- Grid Search: lambda_prune={lambda_prune}, lambda_div={lambda_div}, keep_ratio={keep_ratio} ---")
 
          meta_model = AdvancedMetaModel(
-             num_iter=5,
-             learning_rate=0.05,
-             num_leaves=16,
-             lambda_prune=lambda_prune,
-             lambda_div=lambda_div,
-             keep_ratio=keep_ratio
          )
          meta_model.attach_to(workflow)
          meta_model.train()
-         mse, rmse, mae, r2 = meta_model.evaluate()
+         meta_model.evaluate()
          meta_model.save_results()
-         results.append({
-             "dataset": dataset,
-             "lambda_prune": lambda_prune,
-             "lambda_div": lambda_div,
-             "keep_ratio": keep_ratio,
-             "mse": mse,
-             "rmse": rmse,
-             "mae": mae,
-             "r2": r2
-         })
-         # Save results to CSV
-     df_results = pd.DataFrame(results)
-     df_results.to_csv("grid_search_results.csv", index=False)
 
 
-     best_per_dataset = df_results.loc[df_results.groupby("dataset")["mse"].idxmin()]
-     print("\n=== Best Configuration per Dataset ===")
-     print(best_per_dataset)
+
 
 
   #workflow.train_meta_model_basic()
