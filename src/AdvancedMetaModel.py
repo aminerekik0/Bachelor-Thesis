@@ -1,409 +1,363 @@
 import shap
-
 import lightgbm as lgb
-
 import numpy as np
-
 from .BaseMetaModel import BaseMetaModel
-
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-
 from sklearn.metrics import accuracy_score
 
 class AdvancedMetaModel(BaseMetaModel):
 
-     def __init__(self, num_iter=5, learning_rate=0.1, num_leaves=16,
+    def __init__(self, num_iter=10, learning_rate=0.1, num_leaves=16,
 
-                  lambda_prune=0.2, lambda_div=0.1,keep_ratio=0.15 ,  **kwargs):
+                 lambda_prune=0.9, lambda_div=0.1 ,keep_ratio=0.15 ,
+                 prune_loss_func="_prune_loss_entropy_based",
+                 div_loss_func="_diversity_loss_corr_based",
+                 **kwargs):
 
-         super().__init__(**kwargs)
+        super().__init__(**kwargs)
 
-         self.num_iter = num_iter
+        self.num_iter = num_iter
 
-         self.learning_rate = learning_rate
+        self.learning_rate = learning_rate
 
-         self.num_leaves = num_leaves
+        self.num_leaves = num_leaves
 
-         self.lambda_prune = lambda_prune
+        self.lambda_prune = lambda_prune
 
-         self.lambda_div = lambda_div
+        self.lambda_div = lambda_div
 
-         self.loss_history = []
+        self.loss_history = []
 
-         self.keep_ratio = keep_ratio
 
-         self.meta_model = None
+        self.meta_model = None
 
-         self.prune_loss_final = None
+        self.prune_loss_final = None
 
-         self.div_loss_final = None
+        self.div_loss_final = None
 
-         self.mse = None
+        self.mse = None
 
-         self.rmse = None
+        self.rmse = None
 
-         self.mae = None
+        self.mae = None
 
-         self.r2 =None
+        self.r2 =None
 
-         self.version = ""
+        self.version = ""
 
+        self.acc = None
 
-         self.model = None
+        self.model = None
 
-         self.normal_model_mse = None
+        self.normal_model_mse = None
 
-         self.pruned_ensemble =[]
+        self.pruned_ensemble =[]
 
-         self.pruned_ensemble_mse = None
+        self.pruned_ensemble_mse = None
 
+        self._prune_loss_func = getattr(self, prune_loss_func)
 
-     def train(self):
+        self._div_loss_func = getattr(self, div_loss_func)
 
+        self.keep_ratio = keep_ratio
 
-         num_iter = self.num_iter
 
-         lambda_prune = self.lambda_prune
+    def train(self):
 
-         lambda_div = self.lambda_div
 
-         learning_rate = self.learning_rate
+        num_iter = self.num_iter
 
-         num_leaves = self.num_leaves
+        lambda_prune = self.lambda_prune
 
+        lambda_div = self.lambda_div
 
+        learning_rate = self.learning_rate
 
-         n_trees = len(self.workflow.individual_trees)
+        num_leaves = self.num_leaves
 
 
-         X_meta_train = self._get_meta_features(self.workflow.X_train_meta)
 
-         X_meta_eval  = self._get_meta_features(self.workflow.X_eval_meta)
+        n_trees = len(self.workflow.individual_trees)
 
 
+        X_meta_train = self._get_meta_features(self.workflow.X_train_meta)
 
-         lgb_train = lgb.Dataset(X_meta_train, label=self.workflow.y_train_meta  )
+        X_meta_eval  = self._get_meta_features(self.workflow.X_eval_meta)
 
-         lgb_eval = lgb.Dataset(X_meta_eval, label=self.workflow.y_eval_meta, reference=lgb_train)
 
 
-         if self.data_type == "regression":
+        lgb_train = lgb.Dataset(X_meta_train, label=self.workflow.y_train_meta , free_raw_data=False )
 
-             objective = "regression"
+        lgb_eval = lgb.Dataset(X_meta_eval, label=self.workflow.y_eval_meta, reference=lgb_train)
 
-             metric = "mse"
 
-         else:
+        if self.data_type == "regression":
 
-             objective = "binary"
+            objective = "regression"
 
-             metric = "binary_error"
+            metric = "mse"
 
+        else:
 
-         params = {
+            objective = "binary"
 
-             "objective" : objective ,
+            metric = "binary_error"
 
-             "metric" : metric ,
 
-             "learning_rate" : learning_rate ,
+        params = {
 
-             "num_leaves" : num_leaves ,
+            "objective" : objective ,
 
-             "verbose" : -1 ,
+            "metric" : metric ,
 
-         }
+            "learning_rate" : learning_rate ,
 
-         params_optimized = params.copy()
+            "num_leaves" : num_leaves ,
 
+            "verbose" : -1 ,
 
+        }
 
-         self.model = lgb.train(params, lgb_train)
+        params_optimized = params.copy()
 
-         self.meta_model = self.model
 
 
+        self.meta_model = self.model
 
-         current_rewards_for_training = np.ones(n_trees)
-         reward_momentum=0.7
+        current_rewards_for_training = np.ones(n_trees)
 
-         for iter in range(num_iter) :
+        for iter in range(num_iter) :
 
-             print(f"\n ======= Iteration {iter+1} / {num_iter} ======")
+            print(f"\n ======= Iteration {iter+1} / {num_iter} ======")
 
 
-             lambda_prune_iter = self.lambda_prune
+            lambda_prune_iter = self.lambda_prune
 
-             params_optimized["feature_contri"] = current_rewards_for_training.tolist()
+            params_optimized["feature_contri"] = current_rewards_for_training.tolist()
 
-             self.meta_model = lgb.train(params_optimized,
-                                         lgb_train,
-                                         )
+            self.model = lgb.train(params, lgb_train , init_model=self.model)
+            self.meta_model = lgb.train(params_optimized,
+                                        lgb_train,
+                                        init_model=self.meta_model
+                                        )
+            gains = self.meta_model.feature_importance(importance_type='gain')
 
+            explainer = shap.TreeExplainer(self.meta_model)
 
-             gains = self.meta_model.feature_importance(importance_type='gain')
+            shap_values = np.array(explainer.shap_values(X_meta_eval))
 
+            L_prune, reward_prune = self._prune_loss_func(shap_values)
 
-             explainer = shap.TreeExplainer(self.meta_model)
+            L_div, reward_div = self._div_loss_func(shap_values)
 
-             shap_values = np.array(explainer.shap_values(X_meta_eval))
+            tot_loss = lambda_prune_iter * L_prune + lambda_div * L_div
 
+            self.loss_history.append({
 
-             L_prune, reward_prune = self._prune_loss_entropy_based(shap_values)
+                "iter" : iter+1 , "L_prune" : L_prune ,
 
-             L_div, reward_div = self._diversity_loss_entropy_based(shap_values)
+                "L_div" : L_div , "total_loss" : tot_loss ,
 
+            })
 
+            print(f"L_prune: {L_prune:.4f}, L_div: {L_div:.4f}, Total Loss: {tot_loss:.4f}")
 
-             tot_loss = lambda_prune_iter * L_prune + lambda_div * L_div
 
-             self.loss_history.append({
+            self.prune_loss_final = L_prune
 
-                 "iter" : iter+1 , "L_prune" : L_prune ,
+            self.div_loss_final = L_div
 
-                 "L_div" : L_div , "total_loss" : tot_loss ,
+            new_rewards_for_next_iter = (
 
-             })
+                    lambda_prune_iter * reward_prune
 
-             print(f"L_prune: {L_prune:.4f}, L_div: {L_div:.4f}, Total Loss: {tot_loss:.4f}")
+                    + lambda_div * reward_div
 
+            )
 
-             self.prune_loss_final = L_prune
 
-             self.div_loss_final = L_div
+            print(f"\n--- Analysis for Iteration {iter+1} (Sorted by Gain) ---")
 
+            print(f"{'Tree'} | {'Reward (Input)'} | {'gain (Result)'} | {'Reward (New Output)'}")
 
+            print("-" * 59)
 
 
-             new_rewards_for_next_iter = (
 
-                     lambda_prune_iter * reward_prune
+            sorted_indices = np.argsort(gains)[::-1]
 
-                     + lambda_div * reward_div
 
-             )
+            for k in sorted_indices[:150]:
 
+                reward_in = current_rewards_for_training[k]
 
+                gain = gains[k]
 
+                reward_out = new_rewards_for_next_iter[k]
 
+                print(f"T_{k:<4} | {reward_in:<15.4f} | {gain:<15.1f} | {reward_out:<17.4f}")
 
 
-             print(f"\n--- Analysis for Iteration {iter+1} (Sorted by Gain) ---")
+            current_rewards_for_training = new_rewards_for_next_iter
 
-             print(f"{'Tree'} | {'Reward (Input)'} | {'shap_score (Result)'} | {'Reward (New Output)'}")
 
-             print("-" * 59)
 
 
+        explainer = shap.TreeExplainer(self.meta_model)
+        shap_values = np.array(explainer.shap_values(X_meta_eval))
 
-             sorted_indices = np.argsort(gains)[::-1]
 
+        final_shap_scores = np.mean(np.abs(shap_values), axis=0)
 
-             for k in sorted_indices[:150]:
 
-                 reward_in = current_rewards_for_training[k]
+        normalized_shap = final_shap_scores / (np.max(final_shap_scores) + 1e-12)
+        #threshold = np.percentile(normalized_shap, self.keep_percentile)
 
-                 shap_score = np.mean(np.abs(shap_values[:, k]))
 
-                 reward_out = new_rewards_for_next_iter[k]
+        all_trees = self.workflow.individual_trees
 
-                 print(f"T_{k:<4} | {reward_in:<15.4f} | {shap_score:<15.1f} | {reward_out:<17.4f}")
 
+        n_trees = len(all_trees)
+        k = max(1, int(n_trees * self.keep_ratio))
+        #top_indices = np.where(normalized_shap > 0.1)[0]
+        top_indices = np.argsort(final_shap_scores)[-k:][::-1]
 
+        self.pruned_ensemble = []
+        for i in top_indices:
+            print(f"{i:<12} | {final_shap_scores[i]:<15.6f}")
+            self.pruned_ensemble.append(all_trees[i])
 
-             alpha = 1.0 - reward_momentum
-             current_rewards_for_training = (
-                     (reward_momentum * current_rewards_for_training) +
-                     (alpha * new_rewards_for_next_iter)
-             )
+    def _get_meta_features(self, X):
 
+        return np.column_stack([t.predict(X) for t in self.workflow.individual_trees]).astype(np.float32)
 
+    #basic
 
-         print("loss history", self.loss_history)
+    @staticmethod
+    def _prune_loss_entropy_based(shap_values):
+        abs_shap = np.abs(shap_values)
+        p_hat = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
+        reward = np.mean(p_hat, axis=0)
 
-         explainer = shap.TreeExplainer(self.meta_model)
-         shap_values = np.array(explainer.shap_values(X_meta_eval))
 
+        return -np.mean(np.sum(p_hat * np.log(p_hat + 1e-12), axis=1)) , reward
 
-         final_shap_scores = np.mean(np.abs(shap_values), axis=0)
-         normalized_shap = final_shap_scores / (np.max(final_shap_scores) + 1e-12)
+    @staticmethod
 
-         all_trees = self.workflow.individual_trees
-         keep_ratio = self.keep_ratio
-         n_to_keep = max(1, int(len(final_shap_scores) * keep_ratio))
+    def _prune_loss_weighted_L1(shap_values):
 
-         top_indices = np.where(normalized_shap > 0.3)[0]
-         print(f"\n===== Pruned Ensemble Selection =====")
-         print(f"{'Tree Index':<12} | {'SHAP Importance':<15}")
-         print("-" * 30)
+        s = np.mean(np.abs(shap_values), axis=0)
 
-         for i in top_indices:
-             print(f"{i:<12} | {final_shap_scores[i]:<15.6f}")
-             self.pruned_ensemble.append(all_trees[i])
+        s_norm = s / (np.sum(s) + 1e-8)
 
-     def _get_meta_features(self, X):
+        reward = s_norm
 
-         return np.column_stack([t.predict(X) for t in self.workflow.individual_trees]).astype(np.float32)
 
-     #basic
+        return np.mean(1.0 - s_norm) , reward
 
-     @staticmethod
+    @staticmethod
 
-     def _prune_loss_entropy_based(shap_values):
+    def _prune_loss_weighted_L2(shap_values):
 
-         abs_shap = np.abs(shap_values)
+        s = np.mean(np.abs(shap_values), axis=0)
 
-         p_hat = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
+        s_norm = s / (np.sum(s) + 1e-8)
 
-         reward = np.mean(p_hat, axis=0)
+        reward = s_norm**2
 
-         return -np.mean(np.sum(p_hat * np.log(p_hat + 1e-12), axis=1)) , reward
 
-     @staticmethod
+        return np.mean((1.0 - s_norm)**2) , reward
 
-     def _prune_loss_weighted_L1(shap_values):
 
-         s = np.mean(np.abs(shap_values), axis=0)
 
-         s_norm = s / (np.sum(s) + 1e-8)
+    @staticmethod
 
-         reward = s_norm
+    def _diversity_loss_entropy_based(shap_values):
 
-         return np.mean(1.0 - s_norm) , reward
+        abs_shap = np.abs(shap_values)
 
-     @staticmethod
+        p = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
 
-     def _prune_loss_weighted_L2(shap_values):
+        entropy_loss = -(p * np.log(p +1e-8)).sum(axis=1).mean()
 
-         s = np.mean(np.abs(shap_values), axis=0)
+        reward = 1 - np.mean(p, axis=0)
 
-         s_norm = s / (np.sum(s) + 1e-8)
 
-         reward = s_norm**2
+        return entropy_loss , reward
 
-         return np.mean((1.0 - s_norm)**2) , reward
+    @staticmethod
 
+    def _diversity_loss_cov_based(shap_values):
 
-     # basic
+        M = shap_values.shape[1]
 
+        cov_matrix = np.cov(shap_values.T)
 
-     ####non
-     @staticmethod
-     def _diversity_loss_global(shap_values):
+        cov_matrix[np.isnan(cov_matrix)] = 0.0
 
-         s = np.mean(np.abs(shap_values), axis=0)
+        off_diag_sq_sum = np.sum(np.triu(cov_matrix, k=1)**2) * 2
 
-         s_norm = s / (np.sum(s) + 1e-8)
+        diversity_factor = np.mean(np.abs(cov_matrix), axis=1)
 
-         global_loss = float(np.sum(s_norm ** 2))
+        reward = 1.0 - (diversity_factor/ np.sum(diversity_factor))
 
-         reward = 1- s_norm
 
-         return global_loss, reward
+        return off_diag_sq_sum / (M**2 - M + 1e-12) , reward
 
-     @staticmethod
+    @staticmethod
+    def _diversity_loss_corr_based(shap_values):
+        M = shap_values.shape[1]
+        corr = np.corrcoef(shap_values.T)
+        corr[np.isnan(corr)] = 0.0
 
-     def _diversity_loss_entropy_based(shap_values):
+        diversity_factor = np.mean(np.abs(corr), axis=1)
 
-         abs_shap = np.abs(shap_values)
+        reward = 1.0 - (diversity_factor / (np.sum(diversity_factor) + 1e-8))
 
-         p = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
 
-         entropy_loss = -(p * np.log(p +1e-8)).sum(axis=1).mean()
+        loss = np.mean((corr - np.eye(M))**2)
 
-         reward = 1 - np.mean(p, axis=0)
+        return loss, reward
 
-         return entropy_loss , reward
 
-     @staticmethod
 
-     def _diversity_loss_cov_based(shap_values):
 
-         M = shap_values.shape[1]
+    def evaluate(self):
 
-         cov_matrix = np.cov(shap_values.T)
 
-         cov_matrix[np.isnan(cov_matrix)] = 0.0
+        X_test = self.workflow.X_test
 
-         off_diag_sq_sum = np.sum(np.triu(cov_matrix, k=1)**2) * 2
+        y_test = self.workflow.y_test
 
-         diversity_factor = np.mean(np.abs(cov_matrix), axis=1)
 
-         reward = 1.0 - (diversity_factor/ np.sum(diversity_factor))
+        X_test_meta = self._get_meta_features(self.workflow.X_test)
 
-         return off_diag_sq_sum / (M**2 - M + 1e-12) , reward
+        y_pred = self.meta_model.predict(X_test_meta)
 
-     @staticmethod
-     def _diversity_loss_corr_based(shap_values):
-         s = np.mean(np.abs(shap_values), axis=0)
+        y_pred_normal_model = self.model.predict(X_test_meta)
 
-         s_norm = s / (np.sum(s) + 1e-8)
 
-         M = shap_values.shape[1]
-         corr = np.corrcoef(shap_values.T)
-         corr[np.isnan(corr)] = 0.0
+        pruned_preds = np.mean(np.vstack([t.predict(X_test) for t in self.pruned_ensemble]), axis=0)
 
-         diversity_factor = np.mean(np.abs(corr), axis=1)
+        self.pruned_ensemble_mse = mean_squared_error(y_test, pruned_preds)
 
-         reward = 1.0 - (diversity_factor / (np.sum(diversity_factor) + 1e-8))
+        print("mse pruned ensemble", self.pruned_ensemble_mse)
 
-         loss = np.mean((corr - np.eye(M))**2)
+        if self.data_type == "regression":
 
-         return loss, reward
+            self.normal_model_mse = mean_squared_error(y_test, y_pred_normal_model)
 
+            self.mse = mean_squared_error(y_test, y_pred)
 
+            self.rmse = np.sqrt(self.mse)
 
+            self.mae = mean_absolute_error(y_test, y_pred)
 
-     def evaluate(self):
+            self.r2 = r2_score(y_test, y_pred)
 
+        else:
 
-         X_test = self.workflow.X_test
+            self.acc = accuracy_score(y_test, y_pred)
 
-         y_test = self.workflow.y_test
 
-
-         X_test_meta = self._get_meta_features(self.workflow.X_test)
-
-         y_pred = self.meta_model.predict(X_test_meta)
-
-         y_pred_normal_model = self.model.predict(X_test_meta)
-
-         pruned_preds = np.mean(np.vstack([t.predict(X_test) for t in self.pruned_ensemble]), axis=0)
-
-         self.pruned_ensemble_mse = mean_squared_error(y_test, pruned_preds)
-
-         print("mse pruned ensemble", self.pruned_ensemble_mse)
-
-         if self.data_type == "regression":
-
-             self.normal_model_mse = mean_squared_error(y_test, y_pred_normal_model)
-
-             self.mse = mean_squared_error(y_test, y_pred)
-
-             self.rmse = np.sqrt(self.mse)
-
-             self.mae = mean_absolute_error(y_test, y_pred)
-
-             self.r2 = r2_score(y_test, y_pred)
-
-         else:
-
-             self.mse = accuracy_score(y_test, y_pred)
-
-
-
-         print("full ensemble model main loss " , self.workflow.full_metric)
-
-         print("meta model main loss " , self.mse)
-
-         print("normal model" , self.normal_model_mse)
-
-
-
-         print("prune loss " , self.prune_loss_final)
-
-         print("div loss " , self.div_loss_final)
-
-         return self.mse , self.rmse , self.mae , self.r2
-
-
+        return  self.pruned_ensemble_mse ,self.mse , self.normal_model_mse , self.mae , self.r2

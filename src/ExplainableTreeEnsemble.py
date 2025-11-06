@@ -1,8 +1,9 @@
 import numpy as np
+from scipy import stats
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.tree import ExtraTreeRegressor ,DecisionTreeRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , accuracy_score
+from sklearn.tree import DecisionTreeClassifier ,DecisionTreeRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , accuracy_score ,f1_score
 import shap
 from uci_datasets import Dataset
 import pandas as pd
@@ -58,12 +59,23 @@ class ExplainableTreeEnsemble:
         self.mae = None
         self.r2 =None
 
-    def _prepare_data(self):
-        """Load dataset and create train/validation/test splits."""
+        self.f1 = None
+        self.acc = None
 
-        #TODO : get the x and y from a classification dataset
-        data = Dataset(self.dataset_name)
-        X, y = data.x.astype(np.float32), data.y.ravel()
+    def _prepare_data(self):
+
+        if self.data_type == "classification" :
+           from ucimlrepo import fetch_ucirepo
+
+           from sklearn.datasets import fetch_covtype
+           data = fetch_covtype(as_frame=False)
+           X = data.data
+           y = data.target
+
+
+        else :
+           data = Dataset(self.dataset_name)
+           X, y = data.x.astype(np.float32), data.y.ravel()
 
         # splits
         X_train, X_temp, y_train, y_temp = train_test_split(
@@ -76,9 +88,15 @@ class ExplainableTreeEnsemble:
             X_val, y_val, test_size=0.5, random_state=self.random_state
         )
 
-        self.X_train, self.X_train_meta, self.X_eval_meta, self.X_test = X_train, X_train_meta, X_eval_meta, X_test
+        self.X_train = X_train.to_numpy() if hasattr(X_train, "to_numpy") else np.array(X_train)
+        self.X_train_meta = X_train_meta.to_numpy() if hasattr(X_train_meta, "to_numpy") else np.array(X_train_meta)
+        self.X_eval_meta = X_eval_meta.to_numpy() if hasattr(X_eval_meta, "to_numpy") else np.array(X_eval_meta)
+        self.X_test = X_test.to_numpy() if hasattr(X_test, "to_numpy") else np.array(X_test)
 
-        self.y_train, self.y_train_meta, self.y_eval_meta, self.y_test =  y_train, y_train_meta, y_eval_meta, y_test
+        self.y_train = y_train.to_numpy() if hasattr(y_train, "to_numpy") else np.array(y_train)
+        self.y_train_meta = y_train_meta.to_numpy() if hasattr(y_train_meta, "to_numpy") else np.array(y_train_meta)
+        self.y_eval_meta = y_eval_meta.to_numpy() if hasattr(y_eval_meta, "to_numpy") else np.array(y_eval_meta)
+        self.y_test = y_test.to_numpy() if hasattr(y_test, "to_numpy") else np.array(y_test)
 
 
     def train_base_trees(self):
@@ -93,60 +111,122 @@ class ExplainableTreeEnsemble:
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
             n_features = X_sub.shape[1]
             n_features_subset = int(np.sqrt(n_features))
-            #here I'm using random_state + i to get more randomness in choosing the features in each tree
-            # this helped me to have more diverse trees as usuall .
-            trees = DecisionTreeRegressor(
+            if self.data_type == "regression":
+                trees = DecisionTreeRegressor(
                 max_depth=np.random.choice([2, 5 , 6, 9 , 10]),
                 random_state=self.random_state+i ,
                 max_features = n_features_subset ,
             )
+            else :
+
+                trees = DecisionTreeClassifier(
+                    max_depth=np.random.choice([2, 5 , 6, 9 , 10]),
+                    random_state=self.random_state+i ,
+                    max_features = n_features_subset ,
+                )
 
             trees.fit(X_sub, y_sub)
             self.individual_trees.append(trees)
         self._evaluate()
 
 
-        #TODO : DecisionTreeClassifier
     def _evaluate(self):
         """Evaluate full ensemble using stored test set."""
-        tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
-        self.full_preds = np.mean(tree_preds, axis=0)
+
+
         if self.data_type == "regression" :
+           tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
+           self.full_preds = np.mean(tree_preds, axis=0)
            self.mse = mean_squared_error(self.y_test, self.full_preds)
            self.rmse = np.sqrt(self.mse)
            self.mae = mean_absolute_error(self.y_test, self.full_preds)
            self.r2 = r2_score(self.y_test, self.full_preds)
         else :
-            self.mse = accuracy_score(self.y_test, self.full_preds)
-
-        return self.mse
+           tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
+           from scipy.stats import mode
+           mode_result = stats.mode(tree_preds, axis=0, keepdims=False)
+           majority_vote_preds = mode_result.mode
+           print("preds" ,majority_vote_preds )
+           print("true " ,self.y_test )
+           self.acc = accuracy_score(self.y_test, majority_vote_preds)
+           self.f1 = f1_score(self.y_test, majority_vote_preds, average='weighted')
+        print("full ensemble acc" , self.acc)
+        print("full ensemble f1 " , self.f1)
+        return self.mse , self.acc
 
 
 
 if __name__ == "__main__":
-  dataset_names=["3droad" , "slice" ,"houseelectric" ]
+    import itertools
+    import pandas as pd
+    num_iter_values = [15]
+    learning_rate_values = [0.05]
+    lambda_prune_values = [0.7 , 0.1]
+    lambda_div_values = [0.4]
+    keep_ratio_values = [0.1]
 
-  lambda_prune_values = [0.2]
-  lambda_div_values = [ 0.1]
-  keep_ratios = [0.15]
-  learning_rate =[0.05 , 0.1 , 0,2]
-  num_iter =[3 , 7 , 10]
-  results = []
-  import itertools
-  import pandas as pd
+    dataset_names = ["slice" ,"3droad" ,"bike"]
 
-  for dataset in dataset_names :
-     workflow = ExplainableTreeEnsemble( data_type = "regression" , dataset_name=dataset)
-     workflow.train_base_trees()
-     for lambda_prune, lambda_div, keep_ratio in itertools.product(lambda_prune_values, lambda_div_values, keep_ratios):
-         print(f"\n--- Grid Search: lambda_prune={lambda_prune}, lambda_div={lambda_div}, keep_ratio={keep_ratio} ---")
 
-         meta_model = AdvancedMetaModel(
-         )
-         meta_model.attach_to(workflow)
-         meta_model.train()
-         meta_model.evaluate()
-         meta_model.save_results()
+    results = []
+    for dataset in dataset_names:
+            workflow = ExplainableTreeEnsemble(data_type="regression", dataset_name=dataset)
+            workflow.train_base_trees()
+            workflow._evaluate()
+
+            for (num_iter, lr, lambda_prune, lambda_div, keep_ratio) in itertools.product(
+                    num_iter_values, learning_rate_values, lambda_prune_values, lambda_div_values,
+                    keep_ratio_values
+            ):
+                print(f"\n=== Grid Search: num_iter={num_iter}, lr={lr}, λ_prune={lambda_prune}, "
+                      f"λ_div={lambda_div}, keep_pct={keep_ratio}")
+
+                meta_model = AdvancedMetaModel(
+                num_iter=num_iter,
+                learning_rate=lr,
+                lambda_prune=lambda_prune,
+                lambda_div=lambda_div,
+                    keep_ratio=keep_ratio,
+
+            )
+
+
+                meta_model.attach_to(workflow)
+                meta_model.train()
+                mse_advanced, meta_model_mse, normal_model_mse, _, _ = meta_model.evaluate()
+                meta_model.save_results()
+
+
+                basic_meta_model = BasicMetaModel(keep_ratio = keep_ratio)
+                basic_meta_model.attach_to(workflow)
+                basic_meta_model.train()
+                mse_basic, _ = basic_meta_model.evaluate()
+                basic_meta_model.save_results()
+
+                results.append({
+                "dataset": dataset,
+                "num_iter": num_iter,
+                "learning_rate": lr,
+                "lambda_prune": lambda_prune,
+                "lambda_div": lambda_div,
+                "keep_percentile": keep_ratio,
+                "mse_advanced": mse_advanced,
+                "mse_basic": mse_basic ,
+                "meta_model_mse" : meta_model_mse ,
+                "normal_model_mse" : normal_model_mse
+            })
+
+                df_results = pd.DataFrame(results)
+                file_path ="grid_search_results2.csv"
+                df_results.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
+
+
+
+
+
+
+    print("Grid search finished. Results saved to grid_search_results.csv")
+
 
 
 
