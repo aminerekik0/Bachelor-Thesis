@@ -9,8 +9,8 @@ class AdvancedMetaModel(BaseMetaModel):
 
     def __init__(self, num_iter=10, learning_rate=0.1, num_leaves=16,
 
-                 lambda_prune=0.9, lambda_div=0.1 ,keep_ratio=0.15 ,
-                 prune_loss_func="_prune_loss_entropy_based",
+                 lambda_prune=7, lambda_div=0.1 ,keep_ratio=0.15 ,
+                 prune_loss_func="_prune_loss_weighted_L1",
                  div_loss_func="_diversity_loss_corr_based",
                  **kwargs):
 
@@ -86,7 +86,7 @@ class AdvancedMetaModel(BaseMetaModel):
 
 
 
-        lgb_train = lgb.Dataset(X_meta_train, label=self.workflow.y_train_meta , free_raw_data=False )
+        lgb_train = lgb.Dataset(X_meta_train, label=self.workflow.y_train_meta )
 
         lgb_eval = lgb.Dataset(X_meta_eval, label=self.workflow.y_eval_meta, reference=lgb_train)
 
@@ -122,7 +122,7 @@ class AdvancedMetaModel(BaseMetaModel):
 
 
 
-        self.meta_model = self.model
+
 
         current_rewards_for_training = np.ones(n_trees)
 
@@ -135,10 +135,12 @@ class AdvancedMetaModel(BaseMetaModel):
 
             params_optimized["feature_contri"] = current_rewards_for_training.tolist()
 
-            self.model = lgb.train(params, lgb_train , init_model=self.model)
+            self.model = lgb.train(params, lgb_train)
+
+
             self.meta_model = lgb.train(params_optimized,
                                         lgb_train,
-                                        init_model=self.meta_model
+
                                         )
             gains = self.meta_model.feature_importance(importance_type='gain')
 
@@ -187,7 +189,7 @@ class AdvancedMetaModel(BaseMetaModel):
             sorted_indices = np.argsort(gains)[::-1]
 
 
-            for k in sorted_indices[:150]:
+            for k in sorted_indices[:50]:
 
                 reward_in = current_rewards_for_training[k]
 
@@ -198,7 +200,10 @@ class AdvancedMetaModel(BaseMetaModel):
                 print(f"T_{k:<4} | {reward_in:<15.4f} | {gain:<15.1f} | {reward_out:<17.4f}")
 
 
+            max_reward = np.max(new_rewards_for_next_iter)
             current_rewards_for_training = new_rewards_for_next_iter
+
+            print("current reward for the next iter" , current_rewards_for_training)
 
 
 
@@ -239,21 +244,17 @@ class AdvancedMetaModel(BaseMetaModel):
         p_hat = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
         reward = np.mean(p_hat, axis=0)
 
-
         return -np.mean(np.sum(p_hat * np.log(p_hat + 1e-12), axis=1)) , reward
 
     @staticmethod
 
     def _prune_loss_weighted_L1(shap_values):
-
+        print("shap values" , shap_values)
         s = np.mean(np.abs(shap_values), axis=0)
+        reward = s
+        print("reward from prune " , reward )
 
-        s_norm = s / (np.sum(s) + 1e-8)
-
-        reward = s_norm
-
-
-        return np.mean(1.0 - s_norm) , reward
+        return np.mean(1.0 - s) , reward
 
     @staticmethod
 
@@ -312,9 +313,9 @@ class AdvancedMetaModel(BaseMetaModel):
 
         diversity_factor = np.mean(np.abs(corr), axis=1)
 
-        reward = 1.0 - (diversity_factor / (np.sum(diversity_factor) + 1e-8))
-
-
+        #reward = 1.0 - (diversity_factor / (np.sum(diversity_factor) + 1e-8))
+        reward = 1.0 - np.abs(diversity_factor)
+        print("reward from div " , reward )
         loss = np.mean((corr - np.eye(M))**2)
 
         return loss, reward

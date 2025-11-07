@@ -3,6 +3,7 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score ,accuracy_score , f1_score
 import shap
 from .BaseMetaModel import BaseMetaModel
+import lightgbm as lgb
 
 class BasicMetaModel(BaseMetaModel):
     def __init__(self, n_estimators=50, max_depth=5, keep_ratio=0.15 , **kwargs):
@@ -35,18 +36,32 @@ class BasicMetaModel(BaseMetaModel):
 
 
         if self.data_type == "regression":
-            self.meta_model = RandomForestRegressor(
-                n_estimators=self.n_estimators,
-                max_depth=self.max_depth,
-                random_state=self.random_state
-            )
+            lgb_train = lgb.Dataset(X_meta_train, label=self.workflow.y_train_meta , free_raw_data=False )
+
+            params = {
+
+                "objective" : "regression" ,
+
+                "metric" : 'rmse' ,
+
+                "learning_rate" : 0.05 ,
+
+                "num_leaves" : 16 ,
+
+                "verbose" : -1 ,
+
+            }
+            self.meta_model = lgb.train(params,
+                      lgb_train,
+
+                      )
         else:
             self.meta_model = RandomForestClassifier(
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
                 random_state=self.random_state
             )
-        self.meta_model.fit(X_meta_train, y_train_meta)
+
 
         y_pred = self.meta_model.predict(X_meta_eval)
 

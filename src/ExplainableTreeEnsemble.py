@@ -159,13 +159,13 @@ class ExplainableTreeEnsemble:
 if __name__ == "__main__":
     import itertools
     import pandas as pd
-    num_iter_values = [15]
+    num_iter_values = [3]
     learning_rate_values = [0.05]
-    lambda_prune_values = [0.7 , 0.1]
-    lambda_div_values = [0.4]
+    lambda_prune_values = [10]
+    lambda_div_values = [3]
     keep_ratio_values = [0.1]
 
-    dataset_names = ["slice" ,"3droad" ,"bike"]
+    dataset_names = ["slice"]
 
 
     results = []
@@ -216,9 +216,9 @@ if __name__ == "__main__":
                 "normal_model_mse" : normal_model_mse
             })
 
-                df_results = pd.DataFrame(results)
-                file_path ="grid_search_results2.csv"
-                df_results.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
+            df_results = pd.DataFrame(results)
+            file_path ="grid_search.csv"
+            df_results.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
 
 
 
