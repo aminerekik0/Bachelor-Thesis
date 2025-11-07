@@ -6,7 +6,7 @@ from .BaseMetaModel import BaseMetaModel
 import lightgbm as lgb
 
 class BasicMetaModel(BaseMetaModel):
-    def __init__(self, n_estimators=50, max_depth=5, keep_ratio=0.15 , **kwargs):
+    def __init__(self, n_estimators=50, max_depth=5, keep_ratio=0.1 , **kwargs):
         super().__init__(**kwargs)
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -80,7 +80,7 @@ class BasicMetaModel(BaseMetaModel):
         self._prune_trees()
 
     def _get_meta_features(self, X):
-        # --- UNCHANGED ---
+    
         return np.column_stack([t.predict(X) for t in self.workflow.individual_trees]).astype(np.float32)
 
     def _prune_trees(self):
