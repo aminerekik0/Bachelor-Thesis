@@ -32,8 +32,7 @@ class BaseMetaModel(ABC):
         from datetime import datetime
         import os
         import pandas as pd
-
-    # Default filename uses model class name + dataset
+        
         if filename is None:
            filename = f"{self.__class__.__name__}_results.csv"
 
