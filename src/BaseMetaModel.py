@@ -14,7 +14,7 @@ class BaseMetaModel(ABC):
         self.workflow = workflow
 
     @abstractmethod
-    def train(self):
+    def train(self , *args , **kwargs):
         """Train the meta-model."""
         pass
 
