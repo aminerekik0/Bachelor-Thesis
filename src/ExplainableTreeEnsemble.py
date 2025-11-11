@@ -15,7 +15,6 @@ from src.LinearMetaModel import LinearMetaModel
 
 
 
-
 class ExplainableTreeEnsemble:
     """
     Explainability-Driven Tree Ensemble with SHAP-based pruning.
