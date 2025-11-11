@@ -60,7 +60,7 @@ class LinearMetaModel(BaseMetaModel):
     @staticmethod
     def _loss_prune(shap_vals_t, epsilon=1e-8):
         """
-        Calculates L_prune (Entropy) as defined in your thesis.
+        Calculates L_prune (Entropy) Using torch calculations
         """
         abs_shap = torch.abs(shap_vals_t)
         sum_abs_shap_per_sample = torch.sum(abs_shap, dim=1, keepdim=True)
