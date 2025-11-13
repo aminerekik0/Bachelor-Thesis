@@ -20,11 +20,10 @@ class ExplainableTreeEnsemble:
     Explainability-Driven Tree Ensemble with SHAP-based pruning.
 
     Steps:
-        1. Train M trees.
-        2. Build meta-model using trees outputs as features.
-        3. Compute SHAP values for explainability.
-        4. Prune unimportant trees based on SHAP importance.
-        5. test the remaining trees on the test data
+        1. Build M trees using Boostrap Sampling
+        2. Train each tree
+        3. get the mean or the mode prediction based on the dataset type
+        4. Evaluate this final prediction using multiple metric
     """
     def __init__(self, dataset_name, n_trees=200, max_depth=5,
                  meta_estimators=50, meta_depth=5,learning_rate = 0.05 ,
@@ -185,7 +184,7 @@ class ExplainableTreeEnsemble:
 
             print("full ensemble f1 " , self.f1)
 
-        return self.mse , self.acc
+        return self.mse , self.rmse , self.mae , self.r2 , self.acc , self.f1
 
 
 

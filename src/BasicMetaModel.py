@@ -39,7 +39,8 @@ class BasicMetaModel(BaseMetaModel):
         """
         Runs the "SHAP-first" (Option B, Stage 1) pruning.
         """
-        print(f"=== [Method B] Stage 1: Training model and pruning by SHAP (keep top {self.keep_ratio*100}%) ===")
+        print(f"=== Stage 1: Training model and pruning by SHAP (keep top {self.keep_ratio*100}%) ===")
+
         X_meta_train = self._get_meta_features(self.workflow.X_train_meta, self.workflow.individual_trees)
         X_meta_eval = self._get_meta_features(self.workflow.X_eval_meta, self.workflow.individual_trees)
         y_train_meta = self.workflow.y_train_meta
@@ -50,6 +51,8 @@ class BasicMetaModel(BaseMetaModel):
             self.meta_model = LinearRegression()
             self.meta_model.fit(X_meta_train, y_train_meta)
         else:
+
+            #TODO : check this model
             self.meta_model = LogisticRegression(random_state=self.random_state, max_iter=1000)
             self.meta_model.fit(X_meta_train, y_train_meta)
 
@@ -61,6 +64,7 @@ class BasicMetaModel(BaseMetaModel):
             self.mae = mean_absolute_error(y_eval_meta, y_pred)
             self.r2 = r2_score(y_eval_meta, y_pred)
         else:
+            # TODO : Update metric names for classification
             self.mse = accuracy_score(y_eval_meta, y_pred)
 
 
@@ -71,8 +75,6 @@ class BasicMetaModel(BaseMetaModel):
         self._prune_trees_by_shap()
 
     def _get_meta_features(self, X, trees_list):
-        if not trees_list:
-            return np.array([]).reshape(X.shape[0], 0)
         return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
 
     def _prune_trees_by_shap(self):
@@ -80,23 +82,29 @@ class BasicMetaModel(BaseMetaModel):
         (Helper for train()) Prunes by SHAP and keep_ratio.
         """
         shap_vals_for_importance = self.shap_values
-        if self.shap_values.ndim == 3:
-            shap_vals_for_importance = np.mean(np.abs(self.shap_values), axis=2)
+
 
         tree_importance = np.mean(np.abs(shap_vals_for_importance), axis=0)
         normalized_shap = tree_importance / (np.max(tree_importance) + 1e-12)
 
         self.tree_importance = normalized_shap
+
         all_trees = self.workflow.individual_trees
+
         n_trees = len(all_trees)
-        k = max(1, int(n_trees * self.keep_ratio))
+
+        k = max(5, int(n_trees * self.keep_ratio))
+
         top_indices = np.argsort(tree_importance)[-k:][::-1]
 
         self.pruned_trees = [self.workflow.individual_trees[i] for i in top_indices]
+
         self.pruned_tree_weights = tree_importance[top_indices]
 
         L_prune = self._prune_loss(shap_vals_for_importance)
+
         L_div = self._diversity_loss(shap_vals_for_importance)
+
         self.total_loss = self.mse + L_prune + L_div
 
     def evaluate(self):
@@ -113,14 +121,30 @@ class BasicMetaModel(BaseMetaModel):
         pruned_weights = self.pruned_tree_weights
         normalized_weights = pruned_weights / (np.sum(pruned_weights) + 1e-12)
 
+
+        X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
+        y_train_final = self.workflow.y_train_meta
+        final_eval_model = LinearRegression().fit(X_train_final, y_train_final)
+        w_final = np.abs(final_eval_model.coef_)
+        w_final /= np.sum(w_final)
+
+
         if len(self.pruned_trees) == 1:
+
             pruned_preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
+
             final_preds = pruned_preds_matrix.squeeze()
+
         else:
+
             if self.data_type == "regression":
+
                 pruned_preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
-                final_preds = pruned_preds_matrix @ normalized_weights
+
+                final_preds = pruned_preds_matrix @ w_final
+
             else :
+                #TODO : check this another time
                 tree_preds = np.vstack([t.predict(X_test) for t in self.pruned_trees])
                 final_preds = np.apply_along_axis(
                     lambda x: np.bincount(x.astype(int), weights=normalized_weights).argmax(),
@@ -129,8 +153,11 @@ class BasicMetaModel(BaseMetaModel):
                 )
 
         if self.data_type == "regression":
+
             self.pruned_ensemble_mse = mean_squared_error(y_test, final_preds)
+
             print("Pre-Pruned ensemble MSE (Weighted):", self.pruned_ensemble_mse)
+
         else:
             self.pruned_ensemble_mse = accuracy_score(y_test, final_preds)
             self.f1 = f1_score(y_test, final_preds, average='weighted')
@@ -202,10 +229,15 @@ class BasicMetaModel(BaseMetaModel):
         """
         X_test = self.workflow.X_test
         y_test = self.workflow.y_test
+        trees_to_evaluate = self.shap_then_corr_trees
+
 
         if self.shap_then_corr_weights is None or len(self.shap_then_corr_weights) == 0:
             print("[WARN] [Method B] No trees/weights found. Run prune_by_correlation() first.")
             return None, self.main_loss
+
+        X_train_final = self._get_meta_features(self.workflow.X_train_meta, trees_to_evaluate)
+        y_train_final = self.workflow.y_train_meta
 
         pruned_weights = self.shap_then_corr_weights
         normalized_weights = pruned_weights / (np.sum(pruned_weights) + 1e-12)
@@ -215,15 +247,14 @@ class BasicMetaModel(BaseMetaModel):
             final_preds = pruned_preds_matrix.squeeze()
         else:
             if self.data_type == "regression":
-                pruned_preds_matrix = self._get_meta_features(X_test, self.shap_then_corr_trees)
-                final_preds = pruned_preds_matrix @ normalized_weights
+                final_eval_model = LinearRegression().fit(X_train_final, y_train_final)
+                w_abs = np.abs(final_eval_model.coef_)
+                weights_to_use = w_abs / (np.sum(w_abs) + 1e-12)
+                pruned_preds_matrix = self._get_meta_features(X_test, trees_to_evaluate)
+                final_preds = pruned_preds_matrix @ weights_to_use
             else:
                 tree_preds = np.vstack([t.predict(X_test) for t in self.shap_then_corr_trees])
-                pruned_preds = np.apply_along_axis(
-                    lambda x: np.bincount(x.astype(int), weights=normalized_weights).argmax(),
-                    axis=0,
-                    arr=tree_preds
-                )
+
 
         if self.data_type == "regression":
             mse = mean_squared_error(y_test, final_preds)

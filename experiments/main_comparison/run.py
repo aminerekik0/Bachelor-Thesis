@@ -38,7 +38,7 @@ def run_main_comparison():
 
         workflow = ExplainableTreeEnsemble(data_type="regression", dataset_name=dataset)
         workflow.train_base_trees()
-        mse_full, _ = workflow._evaluate()
+        mse_full, _ , _ ,_,_,_ = workflow._evaluate()
 
 
         if dataset == "bike":
