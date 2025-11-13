@@ -10,7 +10,7 @@ import pandas as pd
 import os
 from src.AdvancedMetaModel import AdvancedMetaModel
 from src.BasicMetaModel import BasicMetaModel
-from src.AdvancedMetaModelSecond import AdvancedMetaModelSecond
+
 from src.LinearMetaModel import LinearMetaModel
 
 
@@ -102,22 +102,36 @@ class ExplainableTreeEnsemble:
 
     def train_base_trees(self):
         """Train M base trees using bootstrap sampling."""
+
         import numpy as np
+
         print("-------------creating the base Trees-------------- ")
+
         n_samples = self.X_train.shape[0]
+
         self.n_samples=n_samples
+
         self.n_features= self.X_train.shape[1]
+
         for i in range(self.n_trees):
+
             indices = np.random.choice(n_samples, int(0.7*n_samples), replace=True)
+
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
+
             n_features = X_sub.shape[1]
+
             n_features_subset = int(np.sqrt(n_features))
+
+
             if self.data_type == "regression":
+
                 trees = DecisionTreeRegressor(
                     max_depth=np.random.choice([2, 5 , 6, 9 , 10]),
                     random_state=self.random_state+i ,
                     max_features = n_features_subset ,
                 )
+
             else :
 
                 trees = DecisionTreeClassifier(
@@ -127,8 +141,10 @@ class ExplainableTreeEnsemble:
                 )
 
             trees.fit(X_sub, y_sub)
+
             self.individual_trees.append(trees)
-        self._evaluate()
+
+
 
 
     def _evaluate(self):
@@ -136,106 +152,40 @@ class ExplainableTreeEnsemble:
 
 
         if self.data_type == "regression" :
+
             tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
+
             self.full_preds = np.mean(tree_preds, axis=0)
+
             self.mse = mean_squared_error(self.y_test, self.full_preds)
+
             self.rmse = np.sqrt(self.mse)
+
             self.mae = mean_absolute_error(self.y_test, self.full_preds)
+
             self.r2 = r2_score(self.y_test, self.full_preds)
+
             print("full ensemble mse" , self.mse)
+
         else :
+
             tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
+
             from scipy.stats import mode
+
             mode_result = stats.mode(tree_preds, axis=0, keepdims=False)
+
             majority_vote_preds = mode_result.mode
+
             self.acc = accuracy_score(self.y_test, majority_vote_preds)
+
             self.f1 = f1_score(self.y_test, majority_vote_preds, average='weighted')
+
             print("full ensemble acc" , self.acc)
+
             print("full ensemble f1 " , self.f1)
+
         return self.mse , self.acc
 
 
 
-if __name__ == "__main__":
-    import itertools
-    import pandas as pd
-
-    # --- BLOCK CHANGED ---
-    # Setup parameters for all 3 methods
-    learning_rate_values = [0.05]
-    lambda_prune_values = [100]
-    lambda_div_values = [1]
-
-    keep_ratio_values = [0.3]
-    corr_percentile_b = [95]
-
-    prune_thresh_values = [0.01]
-    corr_thresh_a = [0.9]
-
-    corr_percentile_c = [95]
-    shap_cutoff_values = [70]
-
-
-    dataset_names = ["3droad" , "slice" ]
-
-
-    results = []
-    for dataset in dataset_names:
-            workflow = ExplainableTreeEnsemble(data_type="regression", dataset_name=dataset)
-            workflow.train_base_trees()
-
-
-            if dataset == "bike":
-             corr_thresh = 0.99
-            elif dataset == "3droad":
-              corr_thresh = 0.9
-            elif dataset == "slice" :
-              corr_thresh = 0.95
-            else :
-                corr_thresh = 0.9
-
-            print("\n--- Running Method B (BasicMetaModel: SHAP -> Corr) ---")
-            model_b = BasicMetaModel()
-            model_b.attach_to(workflow)
-            model_b.train()
-            mse_basic_shap_only, _ = model_b.evaluate()
-
-            model_b.prune_by_correlation(corr_thresh = corr_thresh)
-            mse_b, _ = model_b.evaluate_shap_then_corr()
-            model_b.save_results()
-
-            # --- 2. Method A (NN-Driven Pruning) ---
-            print("\n--- Running Method A (LinearMetaModel: NN-Pruning) ---")
-            model_a = LinearMetaModel()
-            model_a.attach_to(workflow)
-            # Train on the SHAP-pruned list from Method B
-            model_a.train(pruned_trees_list=model_b.pruned_trees)
-            model_a.prune(
-                corr_thresh=corr_thresh # Use dynamic threshold
-            )
-            mse_a, _ = model_a.evaluate()
-            model_a.save_results()
-
-
-
-
-            results.append({
-                "dataset": dataset,
-                "corr_thresh" : corr_thresh ,
-                "mse_basic_shap_only": mse_basic_shap_only,
-                "mse_method_B_ShapCorr": mse_b,
-                "mse_method_A_NN": mse_a,
-
-
-            })
-
-            df_results = pd.DataFrame(results)
-            file_path ="grid_search_ALL_COMPARISONS.csv"
-            df_results.to_csv(file_path, mode='a', header=not os.path.exists(file_path), index=False)
-
-
-
-
-
-
-    print("Grid search finished. Results saved to grid_search_ALL_COMPARISONS.csv")

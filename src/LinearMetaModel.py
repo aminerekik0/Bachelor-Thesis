@@ -54,8 +54,9 @@ class LinearMetaModel(BaseMetaModel):
 
     @staticmethod
     def _loss_accuracy(shap_vals, y_true, y_pred):
-        errors = (y_true - y_pred.reshape(y_true.shape)).reshape(-1, 1)
-        return -np.mean(np.abs(shap_vals * np.sign(-errors)))
+        errors_t = (y_true - y_pred.reshape(y_pred.shape)).reshape(-1, 1)
+        sign_of_neg_errors_t = torch.sign(-errors_t)
+        return -torch.mean(torch.abs(shap_vals) * sign_of_neg_errors_t)
 
     @staticmethod
     def _loss_prune(shap_vals_t, epsilon=1e-8):
@@ -72,7 +73,7 @@ class LinearMetaModel(BaseMetaModel):
         return loss_prune
 
     @staticmethod
-    def _loss_diversity(shap_vals_t, epsilon=1e-8):
+    def _loss_diversity_corr(shap_vals_t, epsilon=1e-8):
         """
         Calculates L_div (Mean Absolute Correlation) in pure PyTorch.
         """
@@ -94,6 +95,33 @@ class LinearMetaModel(BaseMetaModel):
         corr.fill_diagonal_(0)
 
         return torch.mean(torch.abs(corr))
+
+    @staticmethod
+    def _loss_diversity(shap_vals_t, epsilon=1e-8):
+        """
+        Calculates L_div (Global SHAP Concentration) from the exposé [cite: 157-161].
+        This penalizes the model if a few trees dominate the
+        global average attributions.
+        """
+        if shap_vals_t.shape[1] <= 1: # Cannot be non-diverse with 1 tree
+            return torch.tensor(0.0, device=shap_vals_t.device)
+
+        # 1. Calculate average attribution per tree:
+        #    phi_bar_k = (1/N) * sum_i |phi_ik|
+        phi_bar = torch.mean(torch.abs(shap_vals_t), dim=0)
+
+        # 2. Calculate total sum of average attributions:
+        #    sum_j phi_bar_j
+        sum_phi_bar = torch.sum(phi_bar)
+
+        # 3. Normalize to get p_tilde_k:
+        #    p_tilde_k = phi_bar_k / (sum_j phi_bar_j + epsilon)
+        p_tilde = phi_bar / (sum_phi_bar + epsilon)
+
+        # 4. Calculate L_diversity: sum_k (p_tilde_k^2)
+        loss_div = torch.sum(p_tilde ** 2)
+
+        return loss_div
 
     def train(self, pruned_trees_list):
         """
@@ -122,6 +150,7 @@ class LinearMetaModel(BaseMetaModel):
         X_t = torch.tensor(X_train, dtype=torch.float32)
         y_t = torch.tensor(y_train, dtype=torch.float32).view(-1, 1)
         X_eval_t = torch.tensor(X_eval, dtype=torch.float32)
+        y_eval_t = torch.tensor(self.workflow.y_eval_meta, dtype=torch.float32).view(-1, 1)
         X_baseline_t = torch.mean(X_eval_t, dim=0, keepdim=True)
 
         for epoch in range(self.epochs):
@@ -130,14 +159,19 @@ class LinearMetaModel(BaseMetaModel):
 
             y_pred = self.model(X_t)
             loss_mse = nn.functional.mse_loss(y_pred, y_t)
+            y_eval_pred = self.model(X_eval_t)
 
             X_baselined_t = X_eval_t - X_baseline_t
             shap_vals_t = X_baselined_t * self.model.w.T
 
+            loss_acc = self._loss_accuracy(shap_vals_t ,y_eval_t,y_eval_pred )
             loss_prune = self._loss_prune(shap_vals_t, self.epsilon)
             loss_div = self._loss_diversity(shap_vals_t, self.epsilon)
 
-            loss_total = loss_mse + 100 * loss_prune
+            if epoch ==0 :
+                lamda_prune = loss_mse / loss_prune
+
+            loss_total = loss_mse + 100 * loss_prune +30 * loss_div
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | "
