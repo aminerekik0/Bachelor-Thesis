@@ -1,7 +1,7 @@
 import shap
 import lightgbm as lgb
 import numpy as np
-from .BaseMetaModel import BaseMetaModel
+from BaseMetaModel import BaseMetaModel
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.metrics import accuracy_score
 

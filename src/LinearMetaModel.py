@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error
-from .BaseMetaModel import BaseMetaModel
+from BaseMetaModel import BaseMetaModel
 from sklearn.linear_model import LinearRegression # Import this
 
 
@@ -23,12 +23,12 @@ class LinearMetaModel(BaseMetaModel):
     pre-pruned list of trees.
     """
 
-    def __init__(self, λ_acc=1.0, λ_div=1.0, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=1.0, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         """
         Initializes the LinearMetaModel.
         """
         super().__init__(**kwargs)
-        self.λ_acc = λ_acc
+        self.λ_prune = λ_prune
         self.λ_div = λ_div
         self.epochs = epochs
         self.lr = lr
@@ -167,11 +167,15 @@ class LinearMetaModel(BaseMetaModel):
             loss_acc = self._loss_accuracy(shap_vals_t ,y_eval_t,y_eval_pred )
             loss_prune = self._loss_prune(shap_vals_t, self.epsilon)
             loss_div = self._loss_diversity(shap_vals_t, self.epsilon)
+            if epoch == 0:
+                 self.lambda_prune = self.λ_prune * float((loss_mse / (loss_prune + self.epsilon)).item())
+                 self.lambda_div   = self.λ_div  * self.lambda_prune
+                 print(" Lambda prune : " , self.lambda_prune )
+                 print(" Lambda div : " , self.lambda_div ) 
+           
+            
 
-            if epoch ==0 :
-                lamda_prune = loss_mse / loss_prune
-
-            loss_total = loss_mse + 100 * loss_prune +30 * loss_div
+            loss_total = loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | "
@@ -193,6 +197,8 @@ class LinearMetaModel(BaseMetaModel):
             self.w_final = np.zeros_like(w_final_abs)
 
         print(f"[INFO] LinearMetaModel training complete. Final loss: {self.total_loss:.4f}")
+
+      
 
     def prune(self , prune_threshold = 0.009 , corr_thresh = 0.95):
         """

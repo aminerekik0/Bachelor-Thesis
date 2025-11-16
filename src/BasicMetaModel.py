@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score ,accuracy_score , f1_score
 import shap
-from .BaseMetaModel import BaseMetaModel
+from BaseMetaModel import BaseMetaModel
 import lightgbm as lgb
 from sklearn.linear_model import LinearRegression, LogisticRegression
 

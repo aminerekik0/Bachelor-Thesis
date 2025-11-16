@@ -7,11 +7,11 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , 
 import shap
 from uci_datasets import Dataset
 import pandas as pd
-import os
-from src.AdvancedMetaModel import AdvancedMetaModel
-from src.BasicMetaModel import BasicMetaModel
+import os 
+from AdvancedMetaModel import AdvancedMetaModel
+from BasicMetaModel import BasicMetaModel
 
-from src.LinearMetaModel import LinearMetaModel
+from LinearMetaModel import LinearMetaModel
 
 
 
