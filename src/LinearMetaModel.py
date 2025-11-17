@@ -24,7 +24,7 @@ class LinearMetaModel(BaseMetaModel):
     pre-pruned list of trees.
     """
 
-    def __init__(self, λ_prune=1.5, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=1.0, λ_div=1.0, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         """
         Initializes the LinearMetaModel.
         """
@@ -151,7 +151,7 @@ class LinearMetaModel(BaseMetaModel):
            
             
 
-            loss_total = loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div
+            loss_total = loss_mse + self.lambda_prune * loss_prune
 
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:

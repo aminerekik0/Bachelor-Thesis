@@ -1,0 +1,7 @@
+dataset,run_name,lambda_prune_ratio,lambda_div_ratio,mse_stage1_baseline,mse_final,trees_initial,trees_after_weight_prune,trees_final
+3droad,Run 1 (Full Model),0.2000,0.5000,127.9613,120.6423,40,14,14
+3droad,Run 1 (Full Model),0.2000,1.0000,127.9613,110.1299,40,18,18
+3droad,Run 1 (Full Model),0.5000,0.5000,127.9613,113.4871,40,18,18
+3droad,Run 1 (Full Model),0.5000,1.0000,127.9613,112.8696,40,16,16
+3droad,Run 1 (Full Model),1.0000,0.5000,127.9613,111.2667,40,14,14
+3droad,Run 1 (Full Model),1.0000,1.0000,127.9613,105.9618,40,13,13
