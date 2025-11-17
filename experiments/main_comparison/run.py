@@ -7,6 +7,10 @@ from sklearn.metrics import mean_squared_error, accuracy_score, f1_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 import warnings
 
+from src.BasicMetaModel import BasicMetaModel
+from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+from src.LinearMetaModel import LinearMetaModel
+
 # ---------------------------------------------
 # Fix import paths
 # ---------------------------------------------
@@ -16,12 +20,7 @@ src_path = os.path.join(project_root, "src")
 
 sys.path.append(src_path)
 
-# ---------------------------------------------
-# Import the models from src/
-# ---------------------------------------------
-from BasicMetaModel import BasicMetaModel
-from ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from LinearMetaModel import LinearMetaModel
+
 
 warnings.filterwarnings('ignore')
 
@@ -240,7 +239,7 @@ def run_main_comparison():
         results.append({
             "dataset": dataset,
             "corr_thresh": corr_thresh,
-            "keep_ratio": keep_ratios,
+            "keep_ratio": keep_ratio,
             "mse_full": mse_full,
             "trees_full": workflow.n_trees,
             "mse_method_A": mse_a,

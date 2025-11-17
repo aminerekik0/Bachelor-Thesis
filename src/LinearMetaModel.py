@@ -1,5 +1,6 @@
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,7 +24,7 @@ class LinearMetaModel(BaseMetaModel):
     pre-pruned list of trees.
     """
 
-    def __init__(self, λ_prune=1.0, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=1.5, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         """
         Initializes the LinearMetaModel.
         """
@@ -41,6 +42,10 @@ class LinearMetaModel(BaseMetaModel):
         self.pruned_ensemble_mse = None
         self.total_loss = None
         self.pruned_exp = False
+
+        self.final_corr_matrix = None
+        self.final_pruned_indices = None
+
 
     def _get_meta_features(self, X, trees_list):
         """
@@ -72,53 +77,24 @@ class LinearMetaModel(BaseMetaModel):
         loss_prune = torch.mean(entropy_per_sample)
         return loss_prune
 
-    @staticmethod
-    def _loss_diversity_corr(shap_vals_t, epsilon=1e-8):
-        """
-        Calculates L_div (Mean Absolute Correlation) in pure PyTorch.
-        """
-        N, M = shap_vals_t.shape
-        if M <= 1:
-            return torch.tensor(0.0, device=shap_vals_t.device)
-
-        mean = torch.mean(shap_vals_t, dim=0, keepdim=True)
-        centered_data = shap_vals_t - mean
-
-        cov_matrix = (centered_data.T @ centered_data) / (N - 1)
-
-        std_devs = torch.std(shap_vals_t, dim=0) + epsilon
-
-        std_dev_matrix = std_devs.unsqueeze(1) @ std_devs.unsqueeze(0)
-
-        corr = cov_matrix / (std_dev_matrix + epsilon)
-
-        corr.fill_diagonal_(0)
-
-        return torch.mean(torch.abs(corr))
 
     @staticmethod
     def _loss_diversity(shap_vals_t, epsilon=1e-8):
         """
-        Calculates L_div (Global SHAP Concentration) from the exposé [cite: 157-161].
+        Calculates L_div (Global SHAP Concentration)
         This penalizes the model if a few trees dominate the
         global average attributions.
         """
-        if shap_vals_t.shape[1] <= 1: # Cannot be non-diverse with 1 tree
+        if shap_vals_t.shape[1] <= 1:
             return torch.tensor(0.0, device=shap_vals_t.device)
 
-        # 1. Calculate average attribution per tree:
-        #    phi_bar_k = (1/N) * sum_i |phi_ik|
         phi_bar = torch.mean(torch.abs(shap_vals_t), dim=0)
 
-        # 2. Calculate total sum of average attributions:
-        #    sum_j phi_bar_j
+
         sum_phi_bar = torch.sum(phi_bar)
 
-        # 3. Normalize to get p_tilde_k:
-        #    p_tilde_k = phi_bar_k / (sum_j phi_bar_j + epsilon)
         p_tilde = phi_bar / (sum_phi_bar + epsilon)
 
-        # 4. Calculate L_diversity: sum_k (p_tilde_k^2)
         loss_div = torch.sum(p_tilde ** 2)
 
         return loss_div
@@ -165,8 +141,8 @@ class LinearMetaModel(BaseMetaModel):
             shap_vals_t = X_baselined_t * self.model.w.T
 
             loss_acc = self._loss_accuracy(shap_vals_t ,y_eval_t,y_eval_pred )
-            loss_prune = self._loss_prune(shap_vals_t, self.epsilon)
-            loss_div = self._loss_diversity(shap_vals_t, self.epsilon)
+            loss_prune = self._loss_prune(shap_vals_t)
+            loss_div = self._loss_diversity(shap_vals_t)
             if epoch == 0:
                  self.lambda_prune = self.λ_prune * float((loss_mse / (loss_prune + self.epsilon)).item())
                  self.lambda_div   = self.λ_div  * self.lambda_prune
@@ -176,6 +152,7 @@ class LinearMetaModel(BaseMetaModel):
             
 
             loss_total = loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div
+
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | "
@@ -221,6 +198,8 @@ class LinearMetaModel(BaseMetaModel):
 
         print(f"[INFO] Stage 1 (Weight): Kept {len(keep_idx_weights)} / {len(self.w_final)} trees.")
 
+        self.final_pruned_indices = keep_idx_weights
+
 
         if len(keep_idx_weights) > 1:
             print(f"[INFO] Stage 2 (Correlation): Checking {len(keep_idx_weights)} trees for correlation > {corr_thresh}...")
@@ -229,6 +208,9 @@ class LinearMetaModel(BaseMetaModel):
             X_meta_train_pruned = self._get_meta_features(self.workflow.X_train_meta, trees_after_weights)
 
             corr_matrix = np.corrcoef(X_meta_train_pruned.T)
+            corr_df = pd.DataFrame(corr_matrix)
+            self.final_corr_matrix = corr_df.fillna(0.0)
+
             np.fill_diagonal(corr_matrix, 0)
 
             redundant_local_indices = set(np.unique(np.where(np.abs(corr_matrix) > corr_thresh)[0]))
