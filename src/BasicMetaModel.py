@@ -25,6 +25,8 @@ class BasicMetaModel(BaseMetaModel):
         self.mse = None
         self.rmse = None
         self.mae = None
+
+        self.acc = None
         self.r2 =None
         self.f1 = None
         self.pruned_tree_weights = None
@@ -64,8 +66,8 @@ class BasicMetaModel(BaseMetaModel):
             self.mae = mean_absolute_error(y_eval_meta, y_pred)
             self.r2 = r2_score(y_eval_meta, y_pred)
         else:
-            # TODO : Update metric names for classification
-            self.mse = accuracy_score(y_eval_meta, y_pred)
+
+            self.acc = accuracy_score(y_eval_meta, y_pred)
 
 
         explainer = shap.Explainer(self.meta_model, X_meta_eval)
@@ -101,11 +103,6 @@ class BasicMetaModel(BaseMetaModel):
 
         self.pruned_tree_weights = tree_importance[top_indices]
 
-        L_prune = self._prune_loss(shap_vals_for_importance)
-
-        L_div = self._diversity_loss(shap_vals_for_importance)
-
-        self.total_loss = self.mse + L_prune + L_div
 
     def evaluate(self):
         """
@@ -165,17 +162,7 @@ class BasicMetaModel(BaseMetaModel):
 
         return self.pruned_ensemble_mse, self.main_loss
 
-    @staticmethod
-    def _prune_loss(shap_values):
-        abs_shap = np.abs(shap_values)
-        p_hat = abs_shap / (abs_shap.sum(axis=1, keepdims=True) + 1e-12)
-        return -np.mean(np.sum(p_hat * np.log(p_hat + 1e-12), axis=1))
 
-    @staticmethod
-    def _diversity_loss(shap_values):
-        phi_bar = np.mean(np.abs(shap_values), axis=0)
-        p_tilde = phi_bar / (np.sum(phi_bar) + 1e-8)
-        return float(np.sum(p_tilde ** 2))
 
 
     def prune_by_correlation(self, corr_thresh=0.9):

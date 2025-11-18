@@ -181,3 +181,26 @@ class ExplainableTreeEnsemble:
 
 
 
+def run_classification_test():
+    """Runs a classification test on the Covertype dataset."""
+
+    model = ExplainableTreeEnsemble(
+        dataset_name=None,
+        data_type="classification",
+
+    )
+
+    print("\n===== Training Base Trees =====")
+    model.train_base_trees()
+
+    print("\n===== Evaluating Ensemble =====")
+    mse, rmse, mae, r2, acc, f1 = model._evaluate()
+
+    print("\n===== Classification Results =====")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+    print("==================================")
+
+
+if __name__ == "__main__":
+    run_classification_test()

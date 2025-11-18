@@ -24,7 +24,7 @@ class LinearMetaModel(BaseMetaModel):
     pre-pruned list of trees.
     """
 
-    def __init__(self, λ_prune=1.0, λ_div=1.0, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=1.0, λ_div=1.2, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         """
         Initializes the LinearMetaModel.
         """
@@ -45,6 +45,9 @@ class LinearMetaModel(BaseMetaModel):
 
         self.final_corr_matrix = None
         self.final_pruned_indices = None
+
+        self.prune_loss = None
+        self.div_loss = None
 
 
     def _get_meta_features(self, X, trees_list):
@@ -144,16 +147,17 @@ class LinearMetaModel(BaseMetaModel):
             loss_prune = self._loss_prune(shap_vals_t)
             loss_div = self._loss_diversity(shap_vals_t)
             if epoch == 0:
-                 self.lambda_prune = self.λ_prune * float((loss_mse / (loss_prune + self.epsilon)).item())
+                 self.lambda_prune = self.λ_prune  * float((loss_mse / (loss_prune + self.epsilon)).item())
                  self.lambda_div   = self.λ_div  * self.lambda_prune
                  print(" Lambda prune : " , self.lambda_prune )
-                 print(" Lambda div : " , self.lambda_div ) 
-           
-            
-
-            loss_total = loss_mse + self.lambda_prune * loss_prune
+                 print(" Lambda div : " , self.lambda_div )
 
 
+
+            loss_total = loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div
+
+            self.prune_loss = loss_prune.item()
+            self.div_loss = loss_div.item()
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | "
                       f"Total Loss: {loss_total.item():.4f} | "
@@ -177,7 +181,7 @@ class LinearMetaModel(BaseMetaModel):
 
       
 
-    def prune(self , prune_threshold = 0.009 , corr_thresh = 0.95):
+    def prune(self , prune_threshold = 0.005 , corr_thresh = 0.95):
         """
         prune features (Trees) based on their final weights
         """
@@ -190,11 +194,30 @@ class LinearMetaModel(BaseMetaModel):
 
 
         w_max = np.max(self.w_final)
+
+
+
+        # --- ADD THESE LINES TO CHECK THE BEHAVIOR ---
+        actual_threshold = prune_threshold * w_max
+        print(f"\n[DEBUG] Pruning Analysis:")
+        print(f"   -> Max Weight (w_max):       {w_max:.6f}")
+        print(f"   -> Calculated Threshold:     {actual_threshold:.6f}  ( = {prune_threshold} * w_max)")
+
+
+
+        # ---------------------------------------------
+
+
+
+        print("W_max" , w_max)
         if w_max == 0 :
             print("[WARN] All weights are zeros . No feature to prune ")
             keep_idx_weights = []
         else :
-            keep_idx_weights = np.where(self.w_final > prune_threshold * w_max)[0]
+            print("w_final_ before pruning" , self.w_final)
+            keep_idx_weights = np.where(self.w_final > actual_threshold)[0]
+            print(f"   -> Trees kept by weight:     {len(keep_idx_weights)}")
+
 
         print(f"[INFO] Stage 1 (Weight): Kept {len(keep_idx_weights)} / {len(self.w_final)} trees.")
 
