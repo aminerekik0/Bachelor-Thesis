@@ -206,7 +206,7 @@ def run_standard_rf_baseline(workflow):
     print(f"\n--- Running Method D (Standard RF on Original Data) ---")
 
     if workflow.data_type == "regression":
-        rf = RandomForestRegressor(n_estimators=workflow.n_trees, random_state=workflow.random_state , max_depth=np.random.choice([2, 5 , 6, 9 , 10]))
+        rf = RandomForestRegressor(n_estimators=workflow.n_trees, random_state=workflow.random_state , max_depth=8)
         rf.fit(workflow.X_train, workflow.y_train)
         y_pred = rf.predict(workflow.X_test)
         metric = mean_squared_error(workflow.y_test, y_pred)
@@ -265,6 +265,7 @@ def run_main_comparison():
 
         workflow = ExplainableTreeEnsemble(data_type="regression", dataset_name=dataset)
         workflow.train_base_trees()
+        workflow._evaluate()
         mse_full = workflow.mse
 
         ct = params["corr_thresh"]
@@ -350,9 +351,14 @@ def run_main_comparison():
             "lambda_div": ld
         })
 
-        df_results = pd.DataFrame(results)
-        df_results.to_csv(file_path, index=False)
-        print(f"Results for {dataset} saved to {file_path}")
+        # --- SAVE / APPEND RESULTS ---
+        results_df = pd.DataFrame(results)
+        if os.path.exists(file_path):
+            existing_df = pd.read_csv(file_path)
+            results_df = pd.concat([existing_df, results_df], ignore_index=True)
+
+        results_df.to_csv(file_path, index=False)
+        print(f"Results for {dataset} appended to {file_path}")
 
     print(f"\nExperiment finished. All results saved to {file_path}")
 
