@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error
-from BaseMetaModel import BaseMetaModel
+from src.BaseMetaModel import BaseMetaModel
 from sklearn.linear_model import LinearRegression # Import this
 
 
@@ -48,6 +48,10 @@ class LinearMetaModel(BaseMetaModel):
 
         self.prune_loss = None
         self.div_loss = None
+
+        self.initial_prune_loss = None
+        self.initial_div_loss = None
+        self.initial_total_loss = None
 
 
     def _get_meta_features(self, X, trees_list):
@@ -147,10 +151,13 @@ class LinearMetaModel(BaseMetaModel):
             loss_prune = self._loss_prune(shap_vals_t)
             loss_div = self._loss_diversity(shap_vals_t)
             if epoch == 0:
-                 self.lambda_prune = self.λ_prune  * float((loss_mse / (loss_prune + self.epsilon)).item())
-                 self.lambda_div   = self.λ_div  * self.lambda_prune
-                 print(" Lambda prune : " , self.lambda_prune )
-                 print(" Lambda div : " , self.lambda_div )
+                self.lambda_prune = self.λ_prune  * float((loss_mse / (loss_prune + self.epsilon)).item())
+                self.lambda_div   = self.λ_div  * self.lambda_prune
+                print(" Lambda prune : " , self.lambda_prune )
+                print(" Lambda div : " , self.lambda_div )
+                self.initial_prune_loss = loss_prune.item()
+                self.initial_div_loss = loss_div.item()
+                self.initial_total_loss = (loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div).item()
 
 
 
@@ -179,7 +186,7 @@ class LinearMetaModel(BaseMetaModel):
 
         print(f"[INFO] LinearMetaModel training complete. Final loss: {self.total_loss:.4f}")
 
-      
+
 
     def prune(self , prune_threshold = 0.005 , corr_thresh = 0.95):
         """
