@@ -71,8 +71,45 @@ class ExplainableTreeEnsemble:
             # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
 
+            import kagglehub
+            from kagglehub import KaggleDatasetAdapter
+            path = kagglehub.dataset_download("uciml/forest-cover-type-dataset")
+            import os
+            import pandas as pd
+            csv_path = os.path.join(path, "covtype.csv")
+            df = pd.read_csv(csv_path)
+
+            print("path" , path)
+
+            print("First 5 records:", df.head())
+
+            y = (df['Cover_Type'] == 2).astype(int).values
+
+# Features
+            X = df.drop(columns=['Cover_Type'])
+
+            from pmlb import fetch_data, classification_dataset_names
+            import pandas as pd
+
+# Liste aller Klassifikations-Datensätze
+            print(classification_dataset_names)
+
+# Einen bestimmten Datensatz laden, z.B. "adult"
+            X, y = fetch_data('adult', return_X_y=True, local_cache_dir='./data')
+
+# In DataFrame umwandeln
+            df = pd.DataFrame(X, columns=[f"feature_{i}" for i in range(X.shape[1])])
+            df['target'] = y
+
+            print(df.shape)
+            print(df.head())
+
+# Convert categorical features to numeric using one-hot encoding
 
 
+
+            print("Feature matrix shape:", X.shape)
+            print("Target vector shape:", y.shape)
 
 
 
