@@ -24,7 +24,7 @@ class BasicMetaModel(BaseMetaModel):
         self.total_loss = None
         self.full_metric = None
 
-        self.pruned_ensemble_mse = None
+        self.pruned_ensemble_metric = None  # <- updated name
         self.mse = None
         self.rmse = None
         self.mae = None
@@ -32,6 +32,7 @@ class BasicMetaModel(BaseMetaModel):
         self.acc = None
         self.r2 =None
         self.f1 = None
+        self.auc = None
         self.pruned_tree_weights = None
 
         self.shap_then_corr_trees = None
@@ -56,9 +57,12 @@ class BasicMetaModel(BaseMetaModel):
             self.meta_model = LinearRegression()
             self.meta_model.fit(X_meta_train, y_train_meta)
         else:
-
-            #TODO : check this model
-            self.meta_model = LogisticRegression(random_state=self.random_state, max_iter=1000)
+            # binary logistic regression
+            self.meta_model = LogisticRegression(
+                random_state=self.random_state,
+                max_iter=2000,
+                solver="lbfgs"
+            )
             self.meta_model.fit(X_meta_train, y_train_meta)
 
         y_pred = self.meta_model.predict(X_meta_eval)
@@ -69,18 +73,19 @@ class BasicMetaModel(BaseMetaModel):
             self.mae = mean_absolute_error(y_eval_meta, y_pred)
             self.r2 = r2_score(y_eval_meta, y_pred)
         else:
-
             self.acc = accuracy_score(y_eval_meta, y_pred)
 
-
-        explainer = shap.Explainer(self.meta_model, X_meta_eval)
-        self.shap_values = np.array(explainer(X_meta_eval).values)
-
+        # SHAP for binary classification
+        explainer = shap.Explainer(self.meta_model, X_meta_eval, algorithm="linear")
+        shap_result = explainer(X_meta_eval)
+        self.shap_values = np.array(shap_result.values)
 
         self._prune_trees_by_shap()
 
+
     def _get_meta_features(self, X, trees_list):
         return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
+
 
     def _prune_trees_by_shap(self):
         """
@@ -88,22 +93,18 @@ class BasicMetaModel(BaseMetaModel):
         """
         shap_vals_for_importance = self.shap_values
 
-
         tree_importance = np.mean(np.abs(shap_vals_for_importance), axis=0)
         normalized_shap = tree_importance / (np.max(tree_importance) + 1e-12)
 
         self.tree_importance = normalized_shap
 
         all_trees = self.workflow.individual_trees
-
         n_trees = len(all_trees)
-
         k = max(5, int(n_trees * self.keep_ratio))
 
         top_indices = np.argsort(tree_importance)[-k:][::-1]
 
         self.pruned_trees = [self.workflow.individual_trees[i] for i in top_indices]
-
         self.pruned_tree_weights = tree_importance[top_indices]
 
 
@@ -122,49 +123,42 @@ class BasicMetaModel(BaseMetaModel):
         normalized_weights = pruned_weights / (np.sum(pruned_weights) + 1e-12)
 
 
-        X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
-        y_train_final = self.workflow.y_train_meta
-        final_eval_model = LinearRegression().fit(X_train_final, y_train_final)
-        w_final = np.abs(final_eval_model.coef_)
-        w_final /= np.sum(w_final)
+        if self.data_type == "regression":
+            X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
+            y_train_final = self.workflow.y_train_meta
+            final_eval_model = LinearRegression().fit(X_train_final, y_train_final)
+            w_final = np.abs(final_eval_model.coef_)
+            w_final /= np.sum(w_final)
+        else:
+            X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
+            y_train_final = self.workflow.y_train_meta
+
+            final_eval_model = LogisticRegression(max_iter=2000).fit(X_train_final, y_train_final)
+            w_final = np.abs(final_eval_model.coef_[0])
+            w_final /= np.sum(w_final)
 
 
         if len(self.pruned_trees) == 1:
-
             pruned_preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
-
             final_preds = pruned_preds_matrix.squeeze()
-
         else:
-
             if self.data_type == "regression":
-
                 pruned_preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
-
                 final_preds = pruned_preds_matrix @ w_final
+            else:
+                tree_probs = np.vstack([t.predict_proba(X_test)[:, 1] for t in self.pruned_trees])
+                weighted_sum = tree_probs.T @ w_final
+                final_preds = (weighted_sum >= 0.5).astype(int)
 
-            else :
-                #TODO : check this another time
-                tree_preds = np.vstack([t.predict(X_test) for t in self.pruned_trees])
-                final_preds = np.apply_along_axis(
-                    lambda x: np.bincount(x.astype(int), weights=normalized_weights).argmax(),
-                    axis=0,
-                    arr=tree_preds
-                )
 
         if self.data_type == "regression":
-
-            self.pruned_ensemble_mse = mean_squared_error(y_test, final_preds)
-
-            print("Pre-Pruned ensemble MSE (Weighted):", self.pruned_ensemble_mse)
-
+            self.pruned_ensemble_metric = mean_squared_error(y_test, final_preds)
+            print("Pre-Pruned ensemble Metric (Weighted):", self.pruned_ensemble_metric)
         else:
-            self.pruned_ensemble_mse = accuracy_score(y_test, final_preds)
+            self.pruned_ensemble_metric = accuracy_score(y_test, final_preds)
             self.f1 = f1_score(y_test, final_preds, average='weighted')
-            print ("pruned_metric (Weighted)", self.pruned_ensemble_mse)
+            from sklearn.metrics import roc_auc_score
+            self.auc = roc_auc_score(y_test, final_preds)
+            print("Pruned Metric (Weighted):", self.pruned_ensemble_metric)
 
-        return self.pruned_ensemble_mse, self.main_loss
-
-
-
-
+        return self.pruned_ensemble_metric, self.main_loss

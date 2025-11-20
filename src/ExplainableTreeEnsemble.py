@@ -5,7 +5,8 @@ from sklearn.tree import DecisionTreeClassifier ,DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , accuracy_score ,f1_score
 from uci_datasets import Dataset
 
-
+from src.BasicMetaModel import BasicMetaModel
+from src.LinearMetaModel import LinearMetaModel
 
 
 class ExplainableTreeEnsemble:
@@ -54,6 +55,7 @@ class ExplainableTreeEnsemble:
 
         self.f1 = None
         self.acc = None
+        self.auc = None
 
     def _prepare_data(self):
 
@@ -64,6 +66,17 @@ class ExplainableTreeEnsemble:
             data = fetch_covtype(as_frame=False)
             X = data.data
             y = data.target
+            y = (y == 2).astype(int)
+
+            # Install dependencies as needed:
+# pip install kagglehub[pandas-datasets]
+
+
+
+
+
+
+
 
 
         else :
@@ -119,7 +132,7 @@ class ExplainableTreeEnsemble:
             if self.data_type == "regression":
 
                 trees = DecisionTreeRegressor(
-                    max_depth=np.random.choice([2, 3, 6, 8 ,10]),
+                    max_depth=np.random.choice([10]),
                     random_state=self.random_state+i ,
                     max_features = n_features_subset ,
                 )
@@ -163,6 +176,8 @@ class ExplainableTreeEnsemble:
 
             tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
 
+            print(tree_preds)
+
             from scipy.stats import mode
 
             mode_result = stats.mode(tree_preds, axis=0, keepdims=False)
@@ -172,6 +187,9 @@ class ExplainableTreeEnsemble:
             self.acc = accuracy_score(self.y_test, majority_vote_preds)
 
             self.f1 = f1_score(self.y_test, majority_vote_preds, average='weighted')
+            from sklearn.metrics import roc_auc_score
+
+            self.auc = roc_auc_score(self.y_test, majority_vote_preds)
 
             print("full ensemble acc" , self.acc)
 
@@ -184,22 +202,44 @@ class ExplainableTreeEnsemble:
 def run_classification_test():
     """Runs a classification test on the Covertype dataset."""
 
-    model = ExplainableTreeEnsemble(
+    workflow = ExplainableTreeEnsemble(
         dataset_name=None,
         data_type="classification",
 
     )
 
     print("\n===== Training Base Trees =====")
-    model.train_base_trees()
+    workflow.train_base_trees()
 
     print("\n===== Evaluating Ensemble =====")
-    mse, rmse, mae, r2, acc, f1 = model._evaluate()
+    mse, rmse, mae, r2, acc, f1 = workflow._evaluate()
 
     print("\n===== Classification Results =====")
     print(f"Accuracy: {acc:.4f}")
     print(f"F1 Score: {f1:.4f}")
+    print(f"Auc Score: {workflow.auc:.4f}")
     print("==================================")
+
+    meta_model = BasicMetaModel(
+        data_type="classification"
+    )
+    meta_model.attach_to(workflow)
+    meta_model.train()
+    metric, _ = meta_model.evaluate()
+    print(f"\npre Pruned Ensemble Metric: {metric:.4f}")
+    print(f"F1 Score: {meta_model.f1:.4f}")
+    print(f"Auc Score: {meta_model.auc:.4f}")
+
+    model = LinearMetaModel(data_type="classification" )
+    model.attach_to(workflow)
+    model.train(meta_model.pruned_trees)
+    model.prune()
+    metric , _ = model.evaluate()
+    print(f"Auc Score: {model.auc:.4f}")
+    print(f"\nFinal Pruned Ensemble Metric: {metric:.4f}")
+
+
+
 
 
 if __name__ == "__main__":
