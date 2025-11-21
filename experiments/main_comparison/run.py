@@ -3,15 +3,17 @@ import os
 import sys
 import numpy as np
 import shap
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, mean_squared_error, roc_auc_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from scipy.stats import mode
 import warnings
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+from BasicMetaModel import BasicMetaModel
+from ExplainableTreeEnsemble import ExplainableTreeEnsemble 
+from LinearMetaModel import LinearMetaModel
 
-from src.BasicMetaModel import BasicMetaModel
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from src.LinearMetaModel import LinearMetaModel
+
 
 # ---------------------------------------------
 # Fix import paths
@@ -129,6 +131,25 @@ def run_standard_rf_baseline(workflow):
         auc = None
     return acc, f1, auc
 
+def run_standard_rf_baseline_regression(workflow):
+    # Train a standard Random Forest Regressor
+    rf = RandomForestRegressor(
+        n_estimators=workflow.n_trees,
+        random_state=workflow.random_state,
+        max_depth=8
+    )
+
+    rf.fit(workflow.X_train, workflow.y_train)
+
+    # Predict on test set
+    y_pred = rf.predict(workflow.X_test)
+
+    # Metrics
+    mse = mean_squared_error(workflow.y_test, y_pred)
+    rmse = np.sqrt(mse)
+
+    return mse, rmse
+
 # ---------------------------------------------
 # Main Experiment Logic
 # ---------------------------------------------
@@ -136,12 +157,13 @@ def run_main_comparison():
     print("Starting Grid Search Experiment (Classification only)...")
 
     DATASET_CONFIG = {
-        "your_classification_dataset": {"corr_thresh": 0.9, "prune_threshold": 0.01}
+        "3droad": {"corr_thresh": 0.9, "prune_threshold": 0.01} ,
+        "slice": {"corr_thresh": 0.9, "prune_threshold": 0.01}
     }
 
     lambda_grid = {
-        "lambda_prune": [0.5],
-        "lambda_div": [0.1]
+        "lambda_prune": [2 , 0.5, 0.1],
+        "lambda_div": [0.1 , 0.5]
     }
 
     keep_ratio = 0.3
@@ -149,13 +171,13 @@ def run_main_comparison():
 
     output_dir = os.path.join(current_dir, "results")
     os.makedirs(output_dir, exist_ok=True)
-    file_path = os.path.join(output_dir, "classification_grid_search.csv")
+    file_path = os.path.join(output_dir, "regression_grid_search.csv")
 
     results = []
 
     for dataset, params in DATASET_CONFIG.items():
         print(f"\n{'='*60}\nDataset: {dataset}\n{'='*60}")
-        workflow = ExplainableTreeEnsemble(data_type="classification", dataset_name=dataset)
+        workflow = ExplainableTreeEnsemble(data_type="regression", dataset_name=dataset)
         workflow.train_base_trees()
         workflow._evaluate()
 
@@ -165,51 +187,52 @@ def run_main_comparison():
         # -------------------
         # Method B
         # -------------------
-        model_b = BasicMetaModel(keep_ratio=keep_ratio, data_type="classification")
+        model_b = BasicMetaModel(keep_ratio=keep_ratio, data_type="regression")
         model_b.attach_to(workflow)
         model_b.train()
-        _, stage3_trees_b = run_method_b_extended(model_b, prune_threshold=pt, corr_thresh=ct)
-        acc_b_w, f1_b_w, auc_b_w = evaluate_predictions(workflow, stage3_trees_b, weighted=True)
-        acc_b_n, f1_b_n, auc_b_n = evaluate_predictions(workflow, stage3_trees_b, weighted=False)
+       
+        
 
         # -------------------
         # Grid Search over Method A
         # -------------------
         for lp in lambda_grid["lambda_prune"]:
             for ld in lambda_grid["lambda_div"]:
-                model_a = LinearMetaModel(λ_prune=lp, λ_div=ld, data_type="classification")
+                model_a = LinearMetaModel(λ_prune=lp, λ_div=ld, data_type="regression")
                 model_a.attach_to(workflow)
                 model_a.train(pruned_trees_list=model_b.pruned_trees)
                 model_a.prune(prune_threshold=pt, corr_thresh=ct)
-                acc_a_w, f1_a_w, auc_a_w = evaluate_predictions(workflow, model_a.pruned_trees, weighted=True)
-                acc_a_n, f1_a_n, auc_a_n = evaluate_predictions(workflow, model_a.pruned_trees, weighted=False)
+                model_a.evaluate()
+                
+
+                results.append({
+                    "dataset": dataset,
+                    "lambda_prune": lp,
+                    "lambda_div": ld,
+                    "acc_A": model_a.pruned_ensemble_metric,
+                    "rmse_A": np.sqrt(model_a.pruned_ensemble_metric)
+                    
+                    
+                    
+                })
 
                 # -------------------
                 # Method C
                 # -------------------
-        stage2_trees_c = run_baseline_c_corr_then_shap(workflow, corr_thresh=ct, shap_cutoff_percentile=shap_cutoff_percentile)
-        acc_c_w, f1_c_w, auc_c_w = evaluate_predictions(workflow, stage2_trees_c, weighted=True)
-        acc_c_n, f1_c_n, auc_c_n = evaluate_predictions(workflow, stage2_trees_c, weighted=False)
+       
 
                 # -------------------
                 # Method D
                 # -------------------
-        acc_d, f1_d, auc_d = run_standard_rf_baseline(workflow)
+        mse , rmse = run_standard_rf_baseline_regression(workflow)
 
         results.append({
-                    "dataset": dataset,
-                    "lambda_prune": lp,
-                    "lambda_div": ld,
-                    "acc_A_weighted": acc_a_w, "f1_A_weighted": f1_a_w, "auc_A_weighted": auc_a_w,
-                    "acc_A_normal": acc_a_n, "f1_A_normal": f1_a_n, "auc_A_normal": auc_a_n,
-                    "acc_B_weighted": acc_b_w, "f1_B_weighted": f1_b_w, "auc_B_weighted": auc_b_w,
-                    "acc_B_normal": acc_b_n, "f1_B_normal": f1_b_n, "auc_B_normal": auc_b_n,
-                    "acc_C_weighted": acc_c_w, "f1_C_weighted": f1_c_w, "auc_C_weighted": auc_c_w,
-                    "acc_C_normal": acc_c_n, "f1_C_normal": f1_c_n, "auc_C_normal": auc_c_n,
-                    "acc_D": acc_d, "f1_D": f1_d, "auc_D": auc_d,
-                    "corr_thresh": ct,
-                    "prune_thresh": pt
-                })
+        
+            
+            "mse": mse, "rmse": rmse,
+        })
+
+        
 
         # Save results after each dataset
         pd.DataFrame(results).to_csv(file_path, index=False)

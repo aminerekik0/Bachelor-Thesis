@@ -5,8 +5,8 @@ from sklearn.tree import DecisionTreeClassifier ,DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score , accuracy_score ,f1_score
 from uci_datasets import Dataset
 
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
+from BasicMetaModel import BasicMetaModel
+from LinearMetaModel import LinearMetaModel
 
 
 class ExplainableTreeEnsemble:
@@ -19,7 +19,7 @@ class ExplainableTreeEnsemble:
         3. get the mean or the mode prediction based on the dataset type
         4. Evaluate this final prediction using multiple metric
     """
-    def __init__(self, dataset_name, n_trees=200, max_depth=5,
+    def __init__(self, dataset_name="slice", n_trees=200, max_depth=5,
                  meta_estimators=50, meta_depth=5,learning_rate = 0.05 ,
                  lambda_prune=0.5, lambda_div=0.02, random_state=42 , data_type = "regression"):
         self.dataset_name = dataset_name
@@ -68,8 +68,7 @@ class ExplainableTreeEnsemble:
             y = data.target
             y = (y == 2).astype(int)
 
-            # Install dependencies as needed:
-# pip install kagglehub[pandas-datasets]
+
 
             import kagglehub
             from kagglehub import KaggleDatasetAdapter
@@ -87,22 +86,6 @@ class ExplainableTreeEnsemble:
 
 # Features
             X = df.drop(columns=['Cover_Type'])
-
-            from pmlb import fetch_data, classification_dataset_names
-            import pandas as pd
-
-# Liste aller Klassifikations-Datensätze
-            print(classification_dataset_names)
-
-# Einen bestimmten Datensatz laden, z.B. "adult"
-            X, y = fetch_data('adult', return_X_y=True, local_cache_dir='./data')
-
-# In DataFrame umwandeln
-            df = pd.DataFrame(X, columns=[f"feature_{i}" for i in range(X.shape[1])])
-            df['target'] = y
-
-            print(df.shape)
-            print(df.head())
 
 # Convert categorical features to numeric using one-hot encoding
 
@@ -170,7 +153,7 @@ class ExplainableTreeEnsemble:
             if self.data_type == "regression":
 
                 trees = DecisionTreeRegressor(
-                    max_depth=np.random.choice([10]),
+                    max_depth=np.random.choice([2, 5 , 6  ,9, 10]),
                     random_state=self.random_state+i ,
                     max_features = n_features_subset ,
                 )
@@ -178,7 +161,7 @@ class ExplainableTreeEnsemble:
             else :
 
                 trees = DecisionTreeClassifier(
-                    max_depth=np.random.choice([2, 5 , 6, 9 , 10]),
+                    max_depth=np.random.choice([2, 5 , 6 , 10]),
                     random_state=self.random_state+i ,
                     max_features = n_features_subset ,
                 )
@@ -241,8 +224,8 @@ def run_classification_test():
     """Runs a classification test on the Covertype dataset."""
 
     workflow = ExplainableTreeEnsemble(
-        dataset_name=None,
-        data_type="classification",
+        
+        data_type="regression",
 
     )
 
@@ -252,28 +235,23 @@ def run_classification_test():
     print("\n===== Evaluating Ensemble =====")
     mse, rmse, mae, r2, acc, f1 = workflow._evaluate()
 
-    print("\n===== Classification Results =====")
-    print(f"Accuracy: {acc:.4f}")
-    print(f"F1 Score: {f1:.4f}")
-    print(f"Auc Score: {workflow.auc:.4f}")
-    print("==================================")
+    
 
     meta_model = BasicMetaModel(
-        data_type="classification"
+        data_type="regression",
     )
     meta_model.attach_to(workflow)
     meta_model.train()
     metric, _ = meta_model.evaluate()
     print(f"\npre Pruned Ensemble Metric: {metric:.4f}")
-    print(f"F1 Score: {meta_model.f1:.4f}")
-    print(f"Auc Score: {meta_model.auc:.4f}")
+    
 
-    model = LinearMetaModel(data_type="classification" )
+    model = LinearMetaModel(data_type="regression" )
     model.attach_to(workflow)
     model.train(meta_model.pruned_trees)
     model.prune()
     metric , _ = model.evaluate()
-    print(f"Auc Score: {model.auc:.4f}")
+ 
     print(f"\nFinal Pruned Ensemble Metric: {metric:.4f}")
 
 

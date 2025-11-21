@@ -6,7 +6,7 @@ import shap
 import lightgbm as lgb
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
-from src.BaseMetaModel import BaseMetaModel
+from BaseMetaModel import BaseMetaModel
 
 
 class BasicMetaModel(BaseMetaModel):
@@ -161,6 +161,8 @@ class BasicMetaModel(BaseMetaModel):
             self.f1 = f1_score(y_test, final_preds_class, average='weighted')
             from sklearn.metrics import roc_auc_score
             self.auc = roc_auc_score(y_test, final_preds_class)
-            print("Pruned Metric (Weighted):", self.pruned_ensemble_metric)
+            print("Pruned Metric:", self.pruned_ensemble_metric)
+            print("Pruned F1:", self.f1)
+            print("Pruned AUC:", self.auc)
 
         return self.pruned_ensemble_metric, self.main_loss

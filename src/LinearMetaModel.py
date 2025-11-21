@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, accuracy_score, f1_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from src.BaseMetaModel import BaseMetaModel
+from BaseMetaModel import BaseMetaModel
 
 class _TorchModel(nn.Module):
     def __init__(self, n_features):
@@ -47,7 +47,10 @@ class LinearMetaModel(BaseMetaModel):
         self.initial_div_loss = None
         self.initial_total_loss = None
 
+
         self.auc = None
+        self.f1 = None
+        self.acc = None
 
     def _get_meta_features(self, X, trees_list):
         if not trees_list:
@@ -108,7 +111,14 @@ class LinearMetaModel(BaseMetaModel):
             self.model.train()
             opt.zero_grad()
             y_pred = self.model(X_t)
-            loss_mse = nn.functional.mse_loss(y_pred, y_t)
+
+            if self.data_type == "classification":
+                loss_main = nn.functional.binary_cross_entropy_with_logits(y_pred, y_t)
+                loss_main_norm = loss_main / (torch.mean(torch.abs(y_t)) + self.epsilon)
+            else:
+                loss_main = torch.sqrt(nn.functional.mse_loss(y_pred, y_t))
+                loss_main_norm = loss_main / (torch.mean(torch.abs(y_t)) + self.epsilon)    
+
             y_eval_pred = self.model(X_eval_t)
             X_baselined_t = X_eval_t - X_baseline_t
             shap_vals_t = X_baselined_t * self.model.w.T
@@ -116,29 +126,21 @@ class LinearMetaModel(BaseMetaModel):
             loss_prune = self._loss_prune(shap_vals_t)
             loss_div = self._loss_diversity(shap_vals_t)
 
-            loss_mse_norm = loss_mse / (torch.mean(torch.abs(y_t)) + self.epsilon)
+            
             num_trees = shap_vals_t.shape[1]
             max_entropy = np.log(num_trees + self.epsilon)
             loss_prune_norm =  loss_prune / max_entropy
-            loss_div_norm = loss_div
+            loss_div_norm = loss_div 
+           
+            
 
-            if epoch == 0:
-
-
-                self.lambda_prune = float((loss_prune / (loss_mse + self.epsilon)).item())
-                self.lambda_div = self.λ_div * self.lambda_prune
-                self.initial_prune_loss = loss_prune.item()
-                self.initial_div_loss = loss_div.item()
-                self.initial_total_loss = (loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div).item()
-                print(f" Lambda prune: {self.lambda_prune:.4f} | Lambda div: {self.lambda_div:.4f}")
-
-            loss_total = loss_mse_norm +  0.8 * loss_prune_norm + 0.5 *loss_div_norm
+            loss_total = loss_main_norm +  1.0 * loss_prune_norm + 0.1 *loss_div_norm
             self.prune_loss = loss_prune_norm.item()
             self.div_loss = loss_div_norm.item()
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | Total Loss: {loss_total.item():.4f} | "
-                      f"MSE: {loss_mse_norm.item():.4f} | Prune: {loss_prune_norm.item():.4f} | Div: {loss_div_norm.item():.6f}")
+                      f"MSE: {loss_main_norm.item():.4f} | Prune: {loss_prune_norm.item():.4f} | Div: {loss_div_norm.item():.6f}")
 
             loss_total.backward()
             opt.step()
@@ -220,7 +222,7 @@ class LinearMetaModel(BaseMetaModel):
             self.pruned_ensemble_metric = accuracy_score(self.workflow.y_test, final_preds)
             from sklearn.metrics import roc_auc_score
             self.auc = roc_auc_score(self.workflow.y_test, final_preds)
-            f1 = f1_score(self.workflow.y_test, final_preds, average="weighted")
-            print(f"[INFO] Final Pruned Ensemble Accuracy: {self.pruned_ensemble_metric:.4f} | F1: {f1:.4f}")
+            self.f1 = f1_score(self.workflow.y_test, final_preds, average="weighted")
+            print(f"[INFO] Final Pruned Ensemble Accuracy: {self.pruned_ensemble_metric:.4f} | F1: {self.f1:.4f} | AUC: {self.auc:.4f}")
 
         return self.pruned_ensemble_metric, self.total_loss
