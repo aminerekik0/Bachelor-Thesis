@@ -146,19 +146,21 @@ class BasicMetaModel(BaseMetaModel):
                 pruned_preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
                 final_preds = pruned_preds_matrix @ w_final
             else:
-                tree_probs = np.vstack([t.predict_proba(X_test)[:, 1] for t in self.pruned_trees])
-                weighted_sum = tree_probs.T @ w_final
-                final_preds = (weighted_sum >= 0.5).astype(int)
+                tree_labels = np.vstack([t.predict(X_test) for t in self.pruned_trees])
+                from scipy.stats import mode
+                mode_result = mode(tree_labels, axis=0, keepdims=False)
+                final_preds_class = mode_result.mode
+
 
 
         if self.data_type == "regression":
             self.pruned_ensemble_metric = mean_squared_error(y_test, final_preds)
             print("Pre-Pruned ensemble Metric (Weighted):", self.pruned_ensemble_metric)
         else:
-            self.pruned_ensemble_metric = accuracy_score(y_test, final_preds)
-            self.f1 = f1_score(y_test, final_preds, average='weighted')
+            self.pruned_ensemble_metric = accuracy_score(y_test, final_preds_class)
+            self.f1 = f1_score(y_test, final_preds_class, average='weighted')
             from sklearn.metrics import roc_auc_score
-            self.auc = roc_auc_score(y_test, final_preds)
+            self.auc = roc_auc_score(y_test, final_preds_class)
             print("Pruned Metric (Weighted):", self.pruned_ensemble_metric)
 
         return self.pruned_ensemble_metric, self.main_loss

@@ -116,7 +116,15 @@ class LinearMetaModel(BaseMetaModel):
             loss_prune = self._loss_prune(shap_vals_t)
             loss_div = self._loss_diversity(shap_vals_t)
 
+            loss_mse_norm = loss_mse / (torch.mean(torch.abs(y_t)) + self.epsilon)
+            num_trees = shap_vals_t.shape[1]
+            max_entropy = np.log(num_trees + self.epsilon)
+            loss_prune_norm =  loss_prune / max_entropy
+            loss_div_norm = loss_div
+
             if epoch == 0:
+
+
                 self.lambda_prune = float((loss_prune / (loss_mse + self.epsilon)).item())
                 self.lambda_div = self.λ_div * self.lambda_prune
                 self.initial_prune_loss = loss_prune.item()
@@ -124,13 +132,13 @@ class LinearMetaModel(BaseMetaModel):
                 self.initial_total_loss = (loss_mse + self.lambda_prune * loss_prune + self.lambda_div * loss_div).item()
                 print(f" Lambda prune: {self.lambda_prune:.4f} | Lambda div: {self.lambda_div:.4f}")
 
-            loss_total = loss_mse + 0.5 * loss_prune + 0.7  * loss_div
-            self.prune_loss = loss_prune.item()
-            self.div_loss = loss_div.item()
+            loss_total = loss_mse_norm +  0.8 * loss_prune_norm + 0.5 *loss_div_norm
+            self.prune_loss = loss_prune_norm.item()
+            self.div_loss = loss_div_norm.item()
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | Total Loss: {loss_total.item():.4f} | "
-                      f"MSE: {loss_mse.item():.4f} | Prune: {loss_prune.item():.4f} | Div: {loss_div.item():.6f}")
+                      f"MSE: {loss_mse_norm.item():.4f} | Prune: {loss_prune_norm.item():.4f} | Div: {loss_div_norm.item():.6f}")
 
             loss_total.backward()
             opt.step()
@@ -204,8 +212,11 @@ class LinearMetaModel(BaseMetaModel):
             self.pruned_ensemble_metric = mean_squared_error(self.workflow.y_test, final_preds)
             print(f"[INFO] Final Pruned Ensemble MSE: {self.pruned_ensemble_metric:.4f}")
         else:
-            tree_probs = np.vstack([t.predict_proba(self.workflow.X_test)[:, 1] for t in trees_to_evaluate])
-            final_preds = (tree_probs.T @ weights_to_use >= 0.5).astype(int)
+            tree_labels = np.vstack([t.predict(self.workflow.X_test) for t in trees_to_evaluate])
+            from scipy.stats import mode
+            mode_result = mode(tree_labels, axis=0, keepdims=False)
+            final_preds = mode_result.mode
+
             self.pruned_ensemble_metric = accuracy_score(self.workflow.y_test, final_preds)
             from sklearn.metrics import roc_auc_score
             self.auc = roc_auc_score(self.workflow.y_test, final_preds)

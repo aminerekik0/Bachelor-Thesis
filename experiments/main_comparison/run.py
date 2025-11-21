@@ -140,8 +140,8 @@ def run_main_comparison():
     }
 
     lambda_grid = {
-        "lambda_prune": [0.5, 1.0, 2.0],
-        "lambda_div": [0.1, 1.0]
+        "lambda_prune": [0.5],
+        "lambda_div": [0.1]
     }
 
     keep_ratio = 0.3
