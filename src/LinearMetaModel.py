@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import mean_squared_error, accuracy_score, f1_score
+from sklearn.metrics import mean_squared_error, accuracy_score, f1_score, roc_auc_score, r2_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from BaseMetaModel import BaseMetaModel
 
@@ -17,10 +17,6 @@ class _TorchModel(nn.Module):
         return X @ self.w + self.b
 
 class LinearMetaModel(BaseMetaModel):
-    """
-    Linear Meta-Model to combine pre-pruned trees.
-    Supports regression and classification.
-    """
 
     def __init__(self, λ_prune=0.5, λ_div=0.3, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         super().__init__(**kwargs)
@@ -41,16 +37,22 @@ class LinearMetaModel(BaseMetaModel):
         self.final_corr_matrix = None
         self.final_pruned_indices = None
 
-        self.prune_loss = None
-        self.div_loss = None
+        self.initial_main_loss = None
         self.initial_prune_loss = None
         self.initial_div_loss = None
         self.initial_total_loss = None
 
+        self.final_main_loss = None
+        self.final_prune_loss = None
+        self.final_div_loss = None
+        self.final_total_loss = None
+
+        self.kept_after_weight_pruning = None
 
         self.auc = None
         self.f1 = None
         self.acc = None
+        self.r2 = None
 
     def _get_meta_features(self, X, trees_list):
         if not trees_list:
@@ -117,7 +119,7 @@ class LinearMetaModel(BaseMetaModel):
                 loss_main_norm = loss_main / (torch.mean(torch.abs(y_t)) + self.epsilon)
             else:
                 loss_main = torch.sqrt(nn.functional.mse_loss(y_pred, y_t))
-                loss_main_norm = loss_main / (torch.mean(torch.abs(y_t)) + self.epsilon)    
+                loss_main_norm = loss_main / (torch.mean(torch.abs(y_t)) + self.epsilon)
 
             y_eval_pred = self.model(X_eval_t)
             X_baselined_t = X_eval_t - X_baseline_t
@@ -126,17 +128,20 @@ class LinearMetaModel(BaseMetaModel):
             loss_prune = self._loss_prune(shap_vals_t)
             loss_div = self._loss_diversity(shap_vals_t)
 
-            
             num_trees = shap_vals_t.shape[1]
             max_entropy = np.log(num_trees + self.epsilon)
-            loss_prune_norm =  loss_prune / max_entropy
-            loss_div_norm = loss_div 
-           
+            loss_prune_norm = loss_prune / max_entropy
+            loss_div_norm = loss_div
             
 
-            loss_total = loss_main_norm +  1.0 * loss_prune_norm + 0.1 *loss_div_norm
-            self.prune_loss = loss_prune_norm.item()
-            self.div_loss = loss_div_norm.item()
+            loss_total = loss_main_norm + self.λ_prune * loss_prune_norm + self.λ_div * loss_div_norm
+            if epoch == 0:
+               self.initial_main_loss = float(loss_main_norm.item())
+               self.initial_prune_loss = float(loss_prune_norm.item())
+               self.initial_div_loss = float(loss_div_norm.item())
+               self.initial_total_loss = float(loss_total.item())
+
+            
 
             if epoch % 20 == 0 or epoch == self.epochs - 1:
                 print(f"Epoch {epoch:4d} | Total Loss: {loss_total.item():.4f} | "
@@ -146,16 +151,19 @@ class LinearMetaModel(BaseMetaModel):
             opt.step()
 
             if epoch == self.epochs - 1:
-                self.total_loss = loss_total.item()
+               self.final_main_loss = float(loss_main_norm.item())
+               self.final_prune_loss = float(loss_prune_norm.item())
+               self.final_div_loss = float(loss_div_norm.item())
+               self.final_total_loss = float(loss_total.item())
 
         w_final_abs = np.abs(self.model.w.detach().numpy().squeeze())
         if np.sum(w_final_abs) > 1e-8:
             self.w_final = w_final_abs / np.sum(w_final_abs)
         else:
             self.w_final = np.zeros_like(w_final_abs)
-        print(f"[INFO] LinearMetaModel training complete. Final loss: {self.total_loss:.4f}")
+        print(f"[INFO] LinearMetaModel training complete. Final loss: {self.final_total_loss:.4f}")
 
-    def prune(self, prune_threshold=0.005, corr_thresh=0.95):
+    def prune(self, prune_threshold=0.01, corr_thresh=0.98):
         if self.w_final is None:
             print("[ERROR] Call train() before prune()")
             return
@@ -163,21 +171,48 @@ class LinearMetaModel(BaseMetaModel):
         initial_tree_list = self.initial_pruned_trees
         w_max = np.max(self.w_final)
         actual_threshold = prune_threshold * w_max
+
+        print("\n==================== WEIGHTS BEFORE PRUNING ====================")
+        print("Tree | Weight")
+        for i, w in enumerate(self.w_final):
+            print(i, "|", float(w))
+
         if w_max == 0:
             keep_idx_weights = []
         else:
             keep_idx_weights = np.where(self.w_final > actual_threshold)[0]
 
+        self.kept_after_weight_pruning = list(keep_idx_weights)
+
+        print("\n==================== AFTER WEIGHT PRUNING ====================")
+        print("Kept:", list(keep_idx_weights))
+        removed_by_weight = [i for i in range(len(self.w_final)) if i not in keep_idx_weights]
+        print("Removed:", removed_by_weight)
+
         if len(keep_idx_weights) > 1:
             trees_after_weights = [initial_tree_list[i] for i in keep_idx_weights]
-            X_meta_train_pruned = self._get_meta_features(self.workflow.X_train_meta, trees_after_weights)
-            corr_matrix = np.corrcoef(X_meta_train_pruned.T)
+            X_meta_eval_pruned = self._get_meta_features(self.workflow.X_eval_meta, trees_after_weights)
+            corr_matrix = np.corrcoef(X_meta_eval_pruned.T)
             np.fill_diagonal(corr_matrix, 0)
+
+            print("\n==================== CORRELATION MATRIX ====================")
+            print(corr_matrix)
+
             redundant_local_indices = set(np.unique(np.where(np.abs(corr_matrix) > corr_thresh)[0]))
-            final_keep_idx = [idx for i, idx in enumerate(keep_idx_weights) if i not in redundant_local_indices]
-            keep_idx = final_keep_idx
+            redundant_global_indices = {keep_idx_weights[i] for i in redundant_local_indices}
+
+            print("\nCorrelation redundant:", redundant_global_indices)
+
+            keep_idx = [idx for idx in keep_idx_weights if idx not in redundant_global_indices]
+
         else:
             keep_idx = keep_idx_weights
+
+        kept_after_correlation_pruning = list(keep_idx)
+        print("\n==================== AFTER CORRELATION PRUNING ====================")
+        print("Kept:", kept_after_correlation_pruning)
+        removed_corr = [i for i in keep_idx_weights if i not in kept_after_correlation_pruning]
+        print("Removed:", removed_corr)
 
         self.pruned_trees = [initial_tree_list[i] for i in keep_idx]
         self.pruned_exp = True
@@ -209,20 +244,35 @@ class LinearMetaModel(BaseMetaModel):
             weights_to_use = w_abs / (np.sum(w_abs) + 1e-12)
 
         tree_preds = self._get_meta_features(self.workflow.X_test, trees_to_evaluate)
+
+        # =============== REGRESSION METRICS ===============
         if self.data_type == "regression":
             final_preds = tree_preds @ weights_to_use
-            self.pruned_ensemble_metric = mean_squared_error(self.workflow.y_test, final_preds)
-            print(f"[INFO] Final Pruned Ensemble MSE: {self.pruned_ensemble_metric:.4f}")
+            rmse = np.sqrt(mean_squared_error(self.workflow.y_test, final_preds))
+            r2 = r2_score(self.workflow.y_test, final_preds)
+
+            self.pruned_ensemble_metric = rmse
+            self.r2 = r2
+
+            print(f"[INFO] Final Pruned Ensemble RMSE: {rmse:.4f} | R2: {r2:.4f}")
+
+            return rmse, r2
+
+        # =============== CLASSIFICATION METRICS ===============
         else:
             tree_labels = np.vstack([t.predict(self.workflow.X_test) for t in trees_to_evaluate])
             from scipy.stats import mode
             mode_result = mode(tree_labels, axis=0, keepdims=False)
             final_preds = mode_result.mode
 
-            self.pruned_ensemble_metric = accuracy_score(self.workflow.y_test, final_preds)
-            from sklearn.metrics import roc_auc_score
-            self.auc = roc_auc_score(self.workflow.y_test, final_preds)
-            self.f1 = f1_score(self.workflow.y_test, final_preds, average="weighted")
-            print(f"[INFO] Final Pruned Ensemble Accuracy: {self.pruned_ensemble_metric:.4f} | F1: {self.f1:.4f} | AUC: {self.auc:.4f}")
+            acc = accuracy_score(self.workflow.y_test, final_preds)
+            f1 = f1_score(self.workflow.y_test, final_preds, average="weighted")
+            auc = roc_auc_score(self.workflow.y_test, final_preds)
 
-        return self.pruned_ensemble_metric, self.total_loss
+            self.acc = acc
+            self.f1 = f1
+            self.auc = auc
+
+            print(f"[INFO] Acc: {acc:.4f} | F1: {f1:.4f} | AUC: {auc:.4f}")
+
+            return f1, auc
