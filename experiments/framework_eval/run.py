@@ -15,35 +15,36 @@ from LinearMetaModel import LinearMetaModel
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": [1.2],
-        "lambda_div":   [0.5],
+        "lambda_prune": [0.0 ,0.7],
+        "lambda_div":   [0.0 ,0.5],
         "prune_threshold": 0.01,
         "corr_threshold": 0.95,
     },
     "3droad": {
-         "lambda_prune": [0.0 ,1.2],
-        "lambda_div":   [0.0 ,0.5],
+         "lambda_prune": [0.0 ,1.0],
+        "lambda_div":   [0.0 ,0.3],
         "prune_threshold": 0.01,
         "corr_threshold": 0.9,
     },
     "kin40k": {
-         "lambda_prune": [0.0 ,1.2],
-        "lambda_div":   [0.0 ,0.5],
+         "lambda_prune": [0.0 ,0.7],
+        "lambda_div":   [0.0 ,0.5 ],
         "prune_threshold": 0.01,
         "corr_threshold": 0.93,
     },
     "covertype": {
-         "lambda_prune": [0.0, 1.2 ],
+         "lambda_prune": [0.0, 0.5 ],
         "lambda_div":   [0.0, 0.5 ],
         "prune_threshold": 0.01,
         "corr_threshold": 0.92,
-    },
+    } , 
     "higgs": {
-        "lambda_prune": [0.0, 1.0],
-        "lambda_div":   [0.0, 0.7],
+        "lambda_prune": [0.0, 0.5 ],
+        "lambda_div":   [0.0, 0.5 ],
         "prune_threshold": 0.01,
-        "corr_threshold": 0.94,
+        "corr_threshold": 0.92,
     }
+    
 }
 # ============================================================
 
@@ -108,9 +109,6 @@ def run_linear_grid(
             )
             linear_size = len(model.pruned_trees) if model.pruned_trees else 0
 
-            # =========================================
-            #       ADD LOSS VALUES TO THE CSV
-            # =========================================
             row = {
                 "dataset": dataset_name,
                 "task": data_type,
@@ -136,18 +134,6 @@ def run_linear_grid(
                 "final_r2":  final_r2,
                 "final_f1":  final_f1,
                 "final_auc": final_auc,
-
-                # ==== INITIAL LOSSES ====
-                "initial_main_loss": model.initial_main_loss,
-                "initial_prune_loss": model.initial_prune_loss,
-                "initial_div_loss": model.initial_div_loss,
-                "initial_total_loss": model.initial_total_loss,
-
-                # ==== FINAL LOSSES ====
-                "final_main_loss": model.final_main_loss,
-                "final_prune_loss": model.final_prune_loss,
-                "final_div_loss": model.final_div_loss,
-                "final_total_loss": model.final_total_loss,
 
                 # ==== SIZES ====
                 "full_size": full_size,
@@ -226,7 +212,6 @@ def main():
             data = fetch_covtype(as_frame=False)
             X = data.data
             y = (data.target == 2).astype(int)
-            process_dataset(X, y, ds, "classification")
         if ds == "higgs":
             import kagglehub
             import kagglehub
@@ -247,10 +232,10 @@ def main():
             df = pd.read_csv(csv_file, nrows=1000000)
             y = df.iloc[:, 0].astype(int).values
             X = df.iloc[:, 1:].astype("float32").values
-            print("Loaded X shape:", X.shape)
-            print("Loaded y shape:", y.shape)
             print("Path to dataset files:", path) 
             process_dataset(X, y, ds, "classification")
+            
+
 
 
 if __name__ == "__main__":
