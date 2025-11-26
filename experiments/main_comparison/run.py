@@ -9,17 +9,17 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
     accuracy_score,
-    f1_score,
+    f1_score, 
     roc_auc_score,
 )
 
 # adjust import paths if needed
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from BasicMetaModel import BasicMetaModel
-from LinearMetaModel import LinearMetaModel
+
+from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+from src.BasicMetaModel import BasicMetaModel
+from src.LinearMetaModel import LinearMetaModel
 
 
 # ============================================================
@@ -27,14 +27,14 @@ from LinearMetaModel import LinearMetaModel
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": 0.7,
+        "lambda_prune": 0.6,
         "lambda_div": 0.5,
         "prune_threshold": 0.01,
         "corr_threshold": 0.92,
         "task": "regression",
     },
     "3droad": {
-        "lambda_prune": 1.0,
+        "lambda_prune": 0.8,
         "lambda_div": 0.5,
         "prune_threshold": 0.01,
         "corr_threshold": 0.88,
@@ -52,6 +52,13 @@ DATASET_CONFIG = {
         "lambda_div": 0.5,
         "prune_threshold": 0.01,
         "corr_threshold": 0.92,
+        "task": "classification",
+    },
+    "higgs": {
+        "lambda_prune": 0.4,
+        "lambda_div": 0.5,
+        "prune_threshold": 0.01,
+        "corr_threshold": 0.93,
         "task": "classification",
     },
     # you can add "higgs" here later if you want to include it
@@ -432,20 +439,40 @@ def main():
         y = data.y.ravel()
         run_methods_for_dataset(X, y, ds)
 
-    # Classification datasets
-    # -- covertype --
-    data = fetch_covtype(as_frame=False)
-    X_cov = data.data.astype(np.float32)
-    y_cov = (data.target == 2).astype(int)
-    run_methods_for_dataset(X_cov, y_cov, "covertype")
 
-    # If you want to add HIGGS here, you can load it like in your other run.py:
-    # from your KaggleHub loading code, something like:
-    #
-    # df = pd.read_csv(higgs_csv_path, nrows=200000)
-    # X_higgs = df.iloc[:, 1:].values.astype(np.float32)
-    # y_higgs = df.iloc[:, 0].values.astype(int)
-    # run_methods_for_dataset(X_higgs, y_higgs, "higgs")
+    classification_sets = ["covertype"]
+
+    for ds in classification_sets:
+        if ds == "covertype":
+            from sklearn.datasets import fetch_covtype
+            data = fetch_covtype(as_frame=False)
+            X = data.data
+            y = (data.target == 2).astype(int)
+            run_methods_for_dataset(X, y, ds)
+        if ds == "higgs":
+            import kagglehub
+            import kagglehub
+            from kagglehub import KaggleDatasetAdapter
+
+            path = kagglehub.dataset_download("erikbiswas/higgs-uci-dataset")
+            csv_file = None
+            for file in os.listdir(path):
+                if file.endswith(".csv"):
+                    csv_file = os.path.join(path, file)
+                break
+            if csv_file is None:
+                raise FileNotFoundError("No CSV file found in downloaded HIGGS dataset folder!")
+
+            print("Loaded CSV:", csv_file)
+            import pandas as pd
+
+            df = pd.read_csv(csv_file, nrows=1000000)
+            y = df.iloc[:, 0].astype(int).values
+            X = df.iloc[:, 1:].astype("float32").values
+            print("Path to dataset files:", path)
+            run_methods_for_dataset(X, y, ds)
+
+
 
 
 if __name__ == "__main__":

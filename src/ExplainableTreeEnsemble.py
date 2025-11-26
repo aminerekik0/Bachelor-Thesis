@@ -5,8 +5,8 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, f1_score
 from uci_datasets import Dataset
 
-from BasicMetaModel import BasicMetaModel
-from LinearMetaModel import LinearMetaModel
+from src.BasicMetaModel import BasicMetaModel
+from src.LinearMetaModel import LinearMetaModel
 
 
 class ExplainableTreeEnsemble:
@@ -89,7 +89,7 @@ class ExplainableTreeEnsemble:
 
             if self.data_type == "regression":
                 trees = DecisionTreeRegressor(
-                    max_depth=np.random.choice([2, 5, 6, 9, 10]),
+
                     random_state=self.random_state + i,
                     max_features=n_features_subset,
                 )

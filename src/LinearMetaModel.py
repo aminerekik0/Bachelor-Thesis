@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, accuracy_score, f1_score, roc_auc_score, r2_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from BaseMetaModel import BaseMetaModel
+from src.BaseMetaModel import BaseMetaModel
 
 class _TorchModel(nn.Module):
     def __init__(self, n_features):
@@ -18,7 +18,7 @@ class _TorchModel(nn.Module):
 
 class LinearMetaModel(BaseMetaModel):
 
-    def __init__(self, λ_prune=0.5, λ_div=0.3, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=0.4, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         super().__init__(**kwargs)
         self.λ_prune = λ_prune
         self.λ_div = λ_div

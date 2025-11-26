@@ -5,7 +5,7 @@ import shap
 
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
-from BaseMetaModel import BaseMetaModel
+from src.BaseMetaModel import BaseMetaModel
 
 
 class BasicMetaModel(BaseMetaModel):

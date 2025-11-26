@@ -3,11 +3,11 @@ import numpy as np
 from uci_datasets import Dataset
 import sys, os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from BasicMetaModel import BasicMetaModel
-from LinearMetaModel import LinearMetaModel
+
+from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+from src.BasicMetaModel import BasicMetaModel
+from src.LinearMetaModel import LinearMetaModel
 
 
 # ============================================================
