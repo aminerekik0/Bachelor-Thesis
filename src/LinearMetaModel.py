@@ -18,7 +18,7 @@ class _TorchModel(nn.Module):
 
 class LinearMetaModel(BaseMetaModel):
 
-    def __init__(self, λ_prune=0.4, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
+    def __init__(self, λ_prune=1.0, λ_div=0.5, epochs=200, lr=1e-2, epsilon=1e-8, **kwargs):
         super().__init__(**kwargs)
         self.λ_prune = λ_prune
         self.λ_div = λ_div

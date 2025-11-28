@@ -169,7 +169,7 @@ if __name__ == "__main__":
         y = (data.target == 2).astype(int)
 
     # Split Data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
     # 2. Train Base Ensemble
     workflow = ExplainableTreeEnsemble(X=X, y=y, data_type="classification", dataset_name="higgs")

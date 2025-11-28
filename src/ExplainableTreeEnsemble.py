@@ -89,7 +89,7 @@ class ExplainableTreeEnsemble:
 
             if self.data_type == "regression":
                 trees = DecisionTreeRegressor(
-
+                    max_depth=np.random.choice([2, 5, 6, 10]),
                     random_state=self.random_state + i,
                     max_features=n_features_subset,
                 )
@@ -141,3 +141,4 @@ class ExplainableTreeEnsemble:
 
             # Return consistent metrics
             return None, None, None, None, self.acc, self.f1
+
