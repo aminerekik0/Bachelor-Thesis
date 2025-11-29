@@ -195,13 +195,12 @@ class LinearMetaModel(BaseMetaModel):
             corr_matrix = np.corrcoef(X_meta_eval_pruned.T)
             np.fill_diagonal(corr_matrix, 0)
 
-            print("\n==================== CORRELATION MATRIX ====================")
-            print(corr_matrix)
+           
 
             redundant_local_indices = set(np.unique(np.where(np.abs(corr_matrix) > corr_thresh)[0]))
             redundant_global_indices = {keep_idx_weights[i] for i in redundant_local_indices}
 
-            print("\nCorrelation redundant:", redundant_global_indices)
+          
 
             keep_idx = [idx for idx in keep_idx_weights if idx not in redundant_global_indices]
 
@@ -209,14 +208,13 @@ class LinearMetaModel(BaseMetaModel):
             keep_idx = keep_idx_weights
 
         kept_after_correlation_pruning = list(keep_idx)
-        print("\n==================== AFTER CORRELATION PRUNING ====================")
-        print("Kept:", kept_after_correlation_pruning)
+       
         removed_corr = [i for i in keep_idx_weights if i not in kept_after_correlation_pruning]
-        print("Removed:", removed_corr)
+       
 
         self.pruned_trees = [initial_tree_list[i] for i in keep_idx]
         self.pruned_exp = True
-        print(f"[INFO] Final ensemble size after pruning: {len(self.pruned_trees)}")
+       
 
     def evaluate(self):
         if self.model is None or self.pruned_trees is None:

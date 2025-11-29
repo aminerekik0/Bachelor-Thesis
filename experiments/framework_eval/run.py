@@ -15,10 +15,10 @@ from src.LinearMetaModel import LinearMetaModel
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": [0.0 ,0.7],
-        "lambda_div":   [0.0 ,0.5],
+        "lambda_prune": [0.7 , 1.0 ,1.2],
+        "lambda_div":   [0.0 ,0.5 , 0.3 ,0.1],
         "prune_threshold": 0.01,
-        "corr_threshold": 0.95,
+        "corr_threshold": 0.98,
     },
     "3droad": {
          "lambda_prune": [0.0 ,1.0],
@@ -197,8 +197,8 @@ def process_dataset(X, y, dataset_name, data_type):
 
 def main():
 
-    regression_sets = []
-    classification_sets = ["higgs"]
+    regression_sets = ["slice"]
+    classification_sets = []
 
     for ds in regression_sets:
         data = Dataset(ds)

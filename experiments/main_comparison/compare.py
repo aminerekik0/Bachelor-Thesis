@@ -1,254 +1,207 @@
-from experiments.main_comparison.CW_OE import ConstructiveWithoutExploration
 from experiments.main_comparison.CwE import ConstructiveWithExploration
-from experiments.main_comparison.PwE import PruningWithExploration
 from experiments.main_comparison.Pw_oE import PruningWithoutExploration
+from experiments.main_comparison.DREP import DREPPruner
+from experiments.main_comparison.EarlyStop import EarlyStopPruning
+
+from experiments.main_comparison.extra_pruning_methods import (
+    REPruning,
+    KappaPruning,
+    KTPruning
+)
+
 from src.BasicMetaModel import BasicMetaModel
 from src.LinearMetaModel import LinearMetaModel
+from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
 
 import os
 import numpy as np
-from scipy.stats import mode
-from sklearn.metrics import mean_squared_error, accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import LinearRegression
 from uci_datasets import Dataset
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+import pandas as pd
 
-def evaluate_selected_trees(ensemble, selected_indices, method_name, weights=None):
+
+# ===============================================================
+# FIXED λ_prune, λ_div PER DATASET
+# ===============================================================
+LAMBDA_CONFIG = {
+    "slice": (1.2, 0.3),
+    "3droad": (1.2, 0.3),
+    "kin40k": (1.5, 0.3),
+    "parkinsons": (1.2, 0.3),
+    "solar": (1.0, 0.3),
+    "elevators": (1.3, 0.3),
+    "protein": (1.5, 0.3),
+    "tamielectric": (1.0, 0.3),
+
+    # NEW regression datasets
+    "song": (1.2, 0.3),
+    "keggundirected": (1.2, 0.3),
+    "pol": (1.2, 0.3),
+
+    # classification (kept but not executed)
+    "covertype": (1.0, 0.5),
+    "higgs": (0.7, 0.5),
+}
+
+# ===============================================================
+# FIXED TYPE MAP
+# ===============================================================
+DATASET_TYPE = {
+    "slice": "regression",
+    "3droad": "regression",
+    "kin40k": "regression",
+    "parkinsons": "regression",
+    "solar": "regression",
+    "elevators": "regression",
+    "protein": "regression",
+    "tamielectric": "regression",
+    "song": "regression",
+    "keggundirected": "regression",
+    "pol": "regression",
+
+    "covertype": "classification",
+    "higgs": "classification",
+}
+
+
+# ===============================================================
+# Evaluate selected trees WITH META-WEIGHTS
+# ===============================================================
+def evaluate_with_meta_weights(ensemble, selected_indices):
     if len(selected_indices) == 0:
-        print(f"[WARN] No trees selected by {method_name}.")
         return None
 
+    X_eval = ensemble.X_eval_meta
+    y_eval = ensemble.y_eval_meta
     X_test = ensemble.X_test
     y_test = ensemble.y_test
-    selected_trees = [ensemble.individual_trees[i] for i in selected_indices]
 
-    # Get predictions for all selected trees: Shape (n_selected, n_samples)
-    preds_matrix = np.vstack([t.predict(X_test) for t in selected_trees])
+    selected = [ensemble.individual_trees[i] for i in selected_indices]
 
-    # Normalize weights if provided
-    if weights is not None:
-        weights = np.array(weights)
-        weights = weights / (np.sum(weights) + 1e-12)
+    preds_eval = np.column_stack([t.predict(X_eval) for t in selected])
+    preds_test = np.column_stack([t.predict(X_test) for t in selected])
 
-    if ensemble.data_type == "regression":
-        if weights is not None:
-            # Weighted Average
-            final_pred = np.average(preds_matrix, axis=0, weights=weights)
-        else:
-            # Simple Average (Standard Bagging)
-            final_pred = np.mean(preds_matrix, axis=0)
+    lm = LinearRegression()
+    lm.fit(preds_eval, y_eval)
 
-        rmse = np.sqrt(mean_squared_error(y_test, final_pred))
-        print(f"{method_name} -> Trees: {len(selected_trees)}, RMSE: {rmse:.4f}")
-        return {"trees": len(selected_trees), "rmse": rmse}
+    w = np.abs(lm.coef_)
+    w = w / (np.sum(w) + 1e-12)
 
-    else:
-        # Classification
-        if weights is not None:
-            # Weighted Voting
-            final_pred = np.apply_along_axis(
-                lambda x: np.bincount(x.astype(int), weights=weights).argmax(),
-                axis=0,
-                arr=preds_matrix
-            )
-        else:
-            # Majority Voting (Mode)
-            from scipy.stats import mode
-            final_pred = mode(preds_matrix, axis=0, keepdims=False).mode
-
-        acc = accuracy_score(y_test, final_pred)
-        f1 = f1_score(y_test, final_pred, average="weighted")
-        try:
-            auc = roc_auc_score(y_test, final_pred)
-        except ValueError:
-            auc = 0.0
-
-        print(f"{method_name} -> Trees: {len(selected_trees)}, Acc: {acc:.4f}, F1: {f1:.4f}, AUC: {auc:.4f}")
-        return {"trees": len(selected_trees), "acc": acc, "f1": f1, "auc": auc}
+    final_pred = preds_test @ w
+    rmse = np.sqrt(mean_squared_error(y_test, final_pred))
+    return rmse
 
 
-def grid_search_best_lambdas(ensemble, basic_pruned_trees):
-    """
-    Performs a grid search to find the best lambda_prune and lambda_div.
-    Evaluates on the ENSEMBLE'S VALIDATION SET (X_eval_meta), not the test set,
-    to avoid data leakage.
-    """
-    print("\n--- Starting Grid Search for LinearMetaModel ---")
+# ===============================================================
+# Run ALL methods once (with ONE ensemble)
+# ===============================================================
+def run_all_methods_once(ensemble, dataset_name):
 
-    # Define Grid Ranges
-    prune_grid = [1.0, 1.2 ,1.4 ,1,5]
-    div_grid = [0.1,0.2, 0.3, 0.5]
+    λ_prune, λ_div = LAMBDA_CONFIG[dataset_name]
 
-    best_score = float('inf') if ensemble.data_type == "regression" else -1.0
-    best_params = (1.0, 0.1) # Default fallback
-
-    # Use Validation set for Grid Search
-    X_val = ensemble.X_eval_meta
-    y_val = ensemble.y_eval_meta
-
-    for lp in prune_grid:
-        for ld in div_grid:
-            # Train candidate model
-            lm = LinearMetaModel(λ_div=ld, λ_prune=lp)
-            lm.attach_to(ensemble)
-            # Suppress print output during grid search if possible to keep logs clean
-            try:
-                lm.train(basic_pruned_trees)
-                lm.prune()
-            except Exception as e:
-                print(f"Grid Search Error at params {lp}, {ld}: {e}")
-                continue
-
-            survivors = lm.pruned_trees
-            if not survivors:
-                continue
-
-            # Extract weights
-            weight_map = dict(zip(lm.initial_pruned_trees, lm.w_final))
-            w = np.array([weight_map[t] for t in survivors])
-            w = w / (np.sum(w) + 1e-12)
-
-            # Predict on Validation Set
-            preds = np.vstack([t.predict(X_val) for t in survivors])
-
-            if ensemble.data_type == "regression":
-                final_pred = np.average(preds, axis=0, weights=w)
-                score = mean_squared_error(y_val, final_pred) # MSE
-
-                # We want minimal MSE
-                if score < best_score:
-                    best_score = score
-                    best_params = (lp, ld)
-                    print(f"New Best: (λ_prune={lp}, λ_div={ld}) -> Val MSE: {score:.4f}")
-            else:
-                # Classification
-                final_pred = np.apply_along_axis(
-                    lambda x: np.bincount(x.astype(int), weights=w).argmax(),
-                    axis=0,
-                    arr=preds
-                )
-                score = accuracy_score(y_val, final_pred) # Accuracy
-
-                # We want maximal Accuracy
-                if score > best_score:
-                    best_score = score
-                    best_params = (lp, ld)
-                    print(f"New Best: (λ_prune={lp}, λ_div={ld}) -> Val Acc: {score:.4f}")
-
-    print(f"--- Grid Search Finished. Best: λ_prune={best_params[0]}, λ_div={best_params[1]} ---\n")
-    return best_params
-
-
-def run_all_methods(ensemble, methods_dict, λ_prune=0.5, λ_div=0.02):
-    results = {}
-
-    # --- SHAP/Linear MetaModel (YOUR METHOD) ---
-    basic = BasicMetaModel(ensemble.data_type)
+    # ===== SHAP Meta-Model =====
+    basic = BasicMetaModel("regression")
     basic.attach_to(ensemble)
-    basic.train() # Method B stage 1
+    basic.train()
 
-    # Instantiate LinearMetaModel with optimized lambdas
     linear_meta = LinearMetaModel(λ_div=λ_div, λ_prune=λ_prune)
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
     linear_meta.prune()
 
-    # Identify indices
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
+    results = {"SHAP/Linear": evaluate_with_meta_weights(ensemble, shap_indices)}
 
-    # --- MAP WEIGHTS TO SURVIVING TREES ---
-    weight_map = dict(zip(linear_meta.initial_pruned_trees, linear_meta.w_final))
-    final_weights = [weight_map[t] for t in linear_meta.pruned_trees]
-
-    # Evaluate WITH the aligned weights
-    results["SHAP/Linear"] = evaluate_selected_trees(
-        ensemble,
-        shap_indices,
-        "SHAP/Linear",
-        weights=None
-    )
-
-    # --- CES / Other Methods (BASELINES) ---
-    X_val, y_val = ensemble.X_train_meta, ensemble.y_train_meta
-    base_preds_val = [t.predict(X_val) for t in ensemble.individual_trees]
-
-    for name, method in methods_dict.items():
-        # These methods usually just return a subset, implying equal weights
-        selected_preds_val, selected_indices = method.select(base_preds_val, y_val)
-
-        # Evaluate WITHOUT weights (Standard Bagging)
-        results[name] = evaluate_selected_trees(
-            ensemble,
-            selected_indices,
-            name,
-            weights=None
-        )
-
-    return results
-
-def run_methods_for_dataset(X, y, dataset_name):
-    print(f"\n=== Dataset: {dataset_name} ===")
-    data_type = "regression" if len(np.unique(y)) > 20 else "classification"
-
-    # Train base ensemble
-    ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type=data_type)
-    ensemble.train_base_trees()
-
-    # Initialize CES-style methods
+    # === Other pruning methods ===
     methods = {
-        "Cw/oE": ConstructiveWithoutExploration(data_type=data_type),
-        "CwE": ConstructiveWithExploration(data_type=data_type),
-        "Pw/oE": PruningWithoutExploration(data_type=data_type),
-        "PwE": PruningWithExploration(data_type=data_type)
+        "CwE": ConstructiveWithExploration("regression"),
+        "Pw/oE": PruningWithoutExploration("regression"),
+        "EarlyStop": EarlyStopPruning("regression"),
+        "Kappa": KappaPruning("regression"),
+        "KT": KTPruning("regression"),
     }
 
-    # --- GRID SEARCH STEP ---
-    # 1. Train a temporary BasicMetaModel to get the initial pruned set (SHAP input)
-    print("Pre-training BasicMetaModel for Grid Search inputs...")
-    basic_gs = BasicMetaModel(ensemble.data_type)
-    basic_gs.attach_to(ensemble)
-    basic_gs.train()
+    X_meta, y_meta = ensemble.X_train_meta, ensemble.y_train_meta
+    base_preds = [t.predict(X_meta) for t in ensemble.individual_trees]
 
-    # 2. Find best parameters using Validation Set
-    best_lp, best_ld = grid_search_best_lambdas(ensemble, basic_gs.pruned_trees)
+    for name, method in methods.items():
+        _, sel = method.select(base_preds, y_meta)
+        results[name] = evaluate_with_meta_weights(ensemble, sel)
 
-    # Run all methods (Your Method will use the found optimal lambdas)
-    results = run_all_methods(ensemble, methods, λ_prune=best_lp, λ_div=best_ld)
     return results
 
+
+# ===============================================================
+# METHOD B — Run pruning 10 times BUT reuse single trained ensemble
+# ===============================================================
+def run_methods_for_dataset_10_times(X, y, dataset_name):
+
+    print(f"\n=== Training base ensemble ONCE for dataset: {dataset_name} ===")
+
+    ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="regression")
+    ensemble.train_base_trees()
+
+    scores = {
+        "SHAP/Linear": [],
+        "CwE": [],
+        "Pw/oE": [],
+        "EarlyStop": [],
+        "Kappa": [],
+        "KT": [],
+    }
+
+    for run in range(10):
+        print(f"[Run {run+1}/10] {dataset_name}")
+        results_once = run_all_methods_once(ensemble, dataset_name)
+
+        for method in scores:
+            scores[method].append(results_once[method])
+
+    return scores
+
+
+# ===============================================================
+# MAIN LOOP
+# ===============================================================
 def main():
-    # ------------------- REGRESSION DATASETS -------------------
-    for ds in ["slice", "3droad", "kin40k"]:
+
+    regression_sets = [
+        "slice", "3droad", "kin40k",
+        "parkinsons", "solar", "elevators",
+        "protein", "tamielectric",
+        "song", "keggundirected", "pol",
+    ]
+
+    final_rows = []
+
+    for ds in regression_sets:
+
         data = Dataset(ds)
         X = data.x.astype(np.float32)
         y = data.y.ravel()
-        run_methods_for_dataset(X, y, ds)
 
-    # ------------------- CLASSIFICATION DATASETS -------------------
-    classification_sets = ["covertype", "higgs"]
-    for ds in classification_sets:
-        if ds == "covertype":
-            from sklearn.datasets import fetch_covtype
-            data = fetch_covtype(as_frame=False)
-            X = data.data
-            y = (data.target == 2).astype(int)
+        scores = run_methods_for_dataset_10_times(X, y, ds)
 
-        if ds == "higgs":
-            import kagglehub
-            import pandas as pd
-            path = kagglehub.dataset_download("erikbiswas/higgs-uci-dataset")
-            csv_file = None
-            for file in os.listdir(path):
-                if file.endswith(".csv"):
-                    csv_file = os.path.join(path, file)
-                    break
-            if csv_file is None:
-                raise FileNotFoundError("No CSV file found!")
+        for method, values in scores.items():
+            values = np.array(values)
+            mean_rmse = np.mean(values)
+            std_rmse = np.std(values)
 
-            df = pd.read_csv(csv_file, nrows=1000000)
-            y = df.iloc[:, 0].astype(int).values
-            X = df.iloc[:, 1:].astype("float32").values
+            final_rows.append({
+                "dataset": ds,
+                "method": method,
+                "mean_rmse": mean_rmse,
+                "std_rmse": std_rmse
+            })
 
-        run_methods_for_dataset(X, y, ds)
+            print(f"{ds} | {method}: {mean_rmse:.4f} ± {std_rmse:.4f}")
+
+    df = pd.DataFrame(final_rows)
+    df.to_csv("regression_mean_std_method_B.csv", index=False)
+
+    print("\nSaved → regression_mean_std_method_B.csv")
+
 
 if __name__ == "__main__":
     main()

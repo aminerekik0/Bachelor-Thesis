@@ -52,7 +52,7 @@ class ExplainableTreeEnsemble:
 
         # 80/10/5/5 split
         X_train, X_temp, y_train, y_temp = train_test_split(
-            X, y, test_size=0.2, random_state=self.random_state
+            X, y, test_size=0.3, random_state=self.random_state
         )
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, random_state=self.random_state
@@ -89,7 +89,7 @@ class ExplainableTreeEnsemble:
 
             if self.data_type == "regression":
                 trees = DecisionTreeRegressor(
-                    max_depth=np.random.choice([2, 5, 6, 10]),
+                   max_depth=np.random.choice([10]),
                     random_state=self.random_state + i,
                     max_features=n_features_subset,
                 )
