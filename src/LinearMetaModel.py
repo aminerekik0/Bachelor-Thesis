@@ -60,18 +60,37 @@ class LinearMetaModel(BaseMetaModel):
         return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
 
     @staticmethod
-    def _loss_accuracy(shap_vals, y_true, y_pred):
-        errors_t = (y_true - y_pred.reshape(y_pred.shape)).reshape(-1, 1)
-        sign_of_neg_errors_t = torch.sign(-errors_t)
-        return -torch.mean(torch.abs(shap_vals) * sign_of_neg_errors_t)
+    def _loss_accuracy(shap_vals_t, y_true_t, y_pred_t):
+        error = (y_true_t - y_pred_t).view(-1,1)
+        sign_term = torch.tanh(-error / (error.abs().mean() + 1e-8))
+        scaled_abs_shap = torch.abs(shap_vals_t)
+        alignment = scaled_abs_shap * sign_term
+    
+        return -alignment.mean()
 
     @staticmethod
-    def _loss_prune(shap_vals_t, epsilon=1e-8):
+    def _loss_prune(shap_vals_t, y_true_t , y_pred_t , epsilon=1e-8 ):
+
+        
+        
         abs_shap = torch.abs(shap_vals_t)
         sum_abs_shap_per_sample = torch.sum(abs_shap, dim=1, keepdim=True)
         p_hat = abs_shap / (sum_abs_shap_per_sample + epsilon)
         entropy_per_sample = -torch.sum(p_hat * torch.log(p_hat + epsilon), dim=1)
-        return torch.mean(entropy_per_sample)
+
+        max_entropy = np.log(shap_vals_t.shape[1] + epsilon)
+        norm_entropy = entropy_per_sample / max_entropy
+        error = torch.abs((y_true_t - y_pred_t).view(-1))
+        mean_error = error.mean() + epsilon
+        error_weight = error / mean_error
+
+        
+
+       
+
+        #here remove error weight if needed to get the original formula
+        
+        return torch.mean(entropy_per_sample * error_weight)
 
     @staticmethod
     def _loss_diversity(shap_vals_t, epsilon=1e-8):
@@ -79,7 +98,11 @@ class LinearMetaModel(BaseMetaModel):
             return torch.tensor(0.0, device=shap_vals_t.device)
         phi_bar = torch.mean(torch.abs(shap_vals_t), dim=0)
         p_tilde = phi_bar / (torch.sum(phi_bar) + epsilon)
+        diversity_strength = torch.sum(p_tilde ** 2)
+
+
         return torch.sum(p_tilde ** 2)
+    
 
     def train(self, pruned_trees_list):
         print(f"[INFO] Training LinearMetaModel on {len(pruned_trees_list)} pruned trees...")
@@ -125,7 +148,7 @@ class LinearMetaModel(BaseMetaModel):
             X_baselined_t = X_eval_t - X_baseline_t
             shap_vals_t = X_baselined_t * self.model.w.T
             loss_acc = self._loss_accuracy(shap_vals_t, y_eval_t, y_eval_pred)
-            loss_prune = self._loss_prune(shap_vals_t)
+            loss_prune = self._loss_prune(shap_vals_t ,  y_eval_t, y_eval_pred)
             loss_div = self._loss_diversity(shap_vals_t)
 
             num_trees = shap_vals_t.shape[1]
@@ -143,7 +166,7 @@ class LinearMetaModel(BaseMetaModel):
 
             
 
-            if epoch % 20 == 0 or epoch == self.epochs - 1:
+            if epoch % 20 == 0 or epoch == self.epochs - 1: 
                 print(f"Epoch {epoch:4d} | Total Loss: {loss_total.item():.4f} | "
                       f"MSE: {loss_main_norm.item():.4f} | Prune: {loss_prune_norm.item():.4f} | Div: {loss_div_norm.item():.6f}")
 
@@ -163,7 +186,7 @@ class LinearMetaModel(BaseMetaModel):
             self.w_final = np.zeros_like(w_final_abs)
         print(f"[INFO] LinearMetaModel training complete. Final loss: {self.final_total_loss:.4f}")
 
-    def prune(self, prune_threshold=0.01, corr_thresh=0.98):
+    def prune(self, prune_threshold=0.01, corr_thresh=1):
         if self.w_final is None:
             print("[ERROR] Call train() before prune()")
             return

@@ -27,7 +27,7 @@ class BasicMetaModel(BaseMetaModel):
         self.mse = None
         self.rmse = None
         self.mae = None
-        self.r2 = None  # <-- added
+        self.r2 = None
 
         self.acc = None
         self.f1 = None
@@ -41,9 +41,6 @@ class BasicMetaModel(BaseMetaModel):
         self.corr_then_shap_mse = None
 
     def train(self, *args, **kwargs):
-        """
-        Stage 1: SHAP-first pruning
-        """
         print(f"=== Stage 1: Training model and pruning by SHAP (keep top {self.keep_ratio*100}%) ===")
 
         X_meta_train = self._get_meta_features(self.workflow.X_train_meta, self.workflow.individual_trees)
@@ -51,7 +48,6 @@ class BasicMetaModel(BaseMetaModel):
         y_train_meta = self.workflow.y_train_meta
         y_eval_meta = self.workflow.y_eval_meta
 
-        # ----- Fit meta-model -----
         if self.data_type == "regression":
             self.meta_model = LinearRegression()
             self.meta_model.fit(X_meta_train, y_train_meta)
@@ -65,16 +61,14 @@ class BasicMetaModel(BaseMetaModel):
 
         y_pred = self.meta_model.predict(X_meta_eval)
 
-        # ----- Metrics -----
         if self.data_type == "regression":
             self.mse = mean_squared_error(y_eval_meta, y_pred)
             self.rmse = np.sqrt(self.mse)
             self.mae = mean_absolute_error(y_eval_meta, y_pred)
-            self.r2 = r2_score(y_eval_meta, y_pred)  # <-- NEW
+            self.r2 = r2_score(y_eval_meta, y_pred)
         else:
             self.acc = accuracy_score(y_eval_meta, y_pred)
 
-        # ----- SHAP -----
         explainer = shap.Explainer(self.meta_model, X_meta_eval, algorithm="linear")
         shap_result = explainer(X_meta_eval)
         self.shap_values = np.array(shap_result.values)
@@ -85,37 +79,41 @@ class BasicMetaModel(BaseMetaModel):
         return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
 
     def _prune_trees_by_shap(self):
-        """
-        Prune trees by SHAP importance.
-        """
         shap_vals_for_importance = self.shap_values
 
         tree_importance = np.mean(np.abs(shap_vals_for_importance), axis=0)
-        normalized_shap = tree_importance / (np.max(tree_importance) + 1e-12)
 
-        self.tree_importance = normalized_shap
+        X_meta_eval = self._get_meta_features(self.workflow.X_eval_meta, self.workflow.individual_trees)
+        y_eval_meta = self.workflow.y_eval_meta
+
+        rmse_scores = []
+        for t in self.workflow.individual_trees:
+            pred = t.predict(self.workflow.X_eval_meta)
+            rmse_scores.append(np.sqrt(mean_squared_error(y_eval_meta, pred)))
+        rmse_scores = np.array(rmse_scores)
+        rmse_scores = 1 / (rmse_scores + 1e-12)
+
+        combined = 0.5 * (tree_importance / (np.max(tree_importance) + 1e-12)) + \
+                   0.5 * (rmse_scores / (np.max(rmse_scores) + 1e-12))
+
+        self.tree_importance = combined
 
         all_trees = self.workflow.individual_trees
         n_trees = len(all_trees)
 
         k = max(5, int(n_trees * self.keep_ratio))
-        top_indices = np.argsort(tree_importance)[-k:][::-1]
+        top_indices = np.argsort(combined)[-k:][::-1]
 
         self.pruned_trees = [self.workflow.individual_trees[i] for i in top_indices]
-        self.pruned_tree_weights = tree_importance[top_indices]
+        self.pruned_tree_weights = combined[top_indices]
 
     def evaluate(self):
-        """
-        Evaluate SHAP-first pruned trees.
-        """
         X_test = self.workflow.X_test
         y_test = self.workflow.y_test
 
         if self.pruned_tree_weights is None or len(self.pruned_tree_weights) == 0:
-            print("[WARN] No pruned tree weights found. Cannot evaluate.")
             return None, self.main_loss
 
-        # ==== Final linear weighting on meta-train ====
         if self.data_type == "regression":
             X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
             y_train_final = self.workflow.y_train_meta
@@ -123,8 +121,7 @@ class BasicMetaModel(BaseMetaModel):
             final_eval_model = LinearRegression().fit(X_train_final, y_train_final)
             w_final = np.abs(final_eval_model.coef_)
             w_final /= np.sum(w_final)
-
-        else:  # classification
+        else:
             X_train_final = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
             y_train_final = self.workflow.y_train_meta
 
@@ -132,7 +129,6 @@ class BasicMetaModel(BaseMetaModel):
             w_final = np.abs(final_eval_model.coef_[0])
             w_final /= np.sum(w_final)
 
-        # ==== Predictions ====
         if len(self.pruned_trees) == 1:
             preds_matrix = self._get_meta_features(X_test, self.pruned_trees)
             final_preds = preds_matrix.squeeze()
@@ -146,7 +142,6 @@ class BasicMetaModel(BaseMetaModel):
                 mode_result = mode(tree_labels, axis=0, keepdims=False)
                 final_preds_class = mode_result.mode
 
-        # ======================= METRICS ============================
         if self.data_type == "regression":
             rmse = np.sqrt(mean_squared_error(y_test, final_preds))
             r2 = r2_score(y_test, final_preds)
@@ -157,7 +152,7 @@ class BasicMetaModel(BaseMetaModel):
             print(f"Pre-Pruned RMSE: {rmse:.4f} | R2: {r2:.4f}")
             return rmse, r2
 
-        else:  # classification
+        else:
             acc = accuracy_score(y_test, final_preds_class)
             f1 = f1_score(y_test, final_preds_class, average="weighted")
             auc = roc_auc_score(y_test, final_preds_class)

@@ -208,3 +208,107 @@ class KappaPruning:
                 selected_preds.append(predictions_list[idx])
 
         return selected_preds, selected_indices
+    
+    
+class EPRPruner:
+    """
+    Exact EPR (Ensemble Pruning via Replacement) — classification only.
+    This version matches the interface of your other pruning methods:
+        select(predictions_list, y_true)
+    """
+
+    def __init__(self, data_type="classification", subensemble_size=10):
+        self.data_type = data_type
+        self.L = int(subensemble_size)
+
+    # ---------------------------------------------------------
+    # Contribution Con_Dpr(h, S)
+    # ---------------------------------------------------------
+    def contribution(self, S_preds, h_pred, y_true):
+        N = len(y_true)
+        L = S_preds.shape[1]
+
+        # votes for true label
+        v_y = np.sum(S_preds == y_true[:, None], axis=1)
+
+        # strongest vote in S
+        v_max = np.array([
+            np.max(np.unique(row, return_counts=True)[1])
+            for row in S_preds
+        ])
+
+        correct = (h_pred == y_true)
+        incorrect = ~correct
+
+        # Eq. (13) from the paper
+        term = (
+            correct * (L - v_y) +
+            incorrect * (v_y - v_max)
+        )
+
+        return np.mean(term)
+
+    # ---------------------------------------------------------
+    # CG_Dpr(h', h)
+    # ---------------------------------------------------------
+    def compute_CG(self, S_preds, h_pred, hprime_pred, y_true, remove_idx):
+        # S \ {h'}
+        S_without_hprime = np.delete(S_preds, remove_idx, axis=1)
+
+        # S \ {h}  (h is not in S yet)
+        S_without_h = S_preds
+
+        con_hprime = self.contribution(S_without_h, hprime_pred, y_true)
+        con_h      = self.contribution(S_without_hprime, h_pred, y_true)
+
+        return con_hprime - con_h
+
+    # ---------------------------------------------------------
+    # Main Algorithm — works with (predictions_list, y_true)
+    # ---------------------------------------------------------
+    def select(self, predictions_list, y_true):
+        preds = np.array(predictions_list)  # (M, N)
+        M = preds.shape[0]
+        L = self.L
+
+        # 1) Random initialization
+        all_idx = np.arange(M)
+        np.random.shuffle(all_idx)
+
+        S_idx = list(all_idx[:L])
+        H_idx = list(all_idx[L:])
+
+        # Predictions of S
+        S_preds = preds[S_idx].T  # (N, L)
+
+        # 2) Process each h ∈ H
+        for h_idx in H_idx:
+            h_pred = preds[h_idx]
+
+            best_CG = -np.inf
+            best_hprime_idx = None
+
+            # For each h' ∈ S:
+            for j, hprime_idx in enumerate(S_idx):
+                hprime_pred = preds[hprime_idx]
+
+                CG = self.compute_CG(
+                    S_preds=S_preds,
+                    h_pred=h_pred,
+                    hprime_pred=hprime_pred,
+                    y_true=y_true,
+                    remove_idx=j
+                )
+
+                if CG > best_CG:
+                    best_CG = CG
+                    best_hprime_idx = j
+
+            # Replace only if CG > 0
+            if best_CG > 0:
+                S_idx[best_hprime_idx] = h_idx
+                S_preds = preds[S_idx].T
+
+        # return predictions and indices (like other methods)
+        selected_preds = [preds[i] for i in S_idx]
+        return selected_preds, S_idx

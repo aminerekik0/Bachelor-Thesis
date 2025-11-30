@@ -6,7 +6,8 @@ from experiments.main_comparison.EarlyStop import EarlyStopPruning
 from experiments.main_comparison.extra_pruning_methods import (
     REPruning,
     KappaPruning,
-    KTPruning
+    KTPruning ,
+    EPRPruner
 )
 
 from src.BasicMetaModel import BasicMetaModel
@@ -25,8 +26,8 @@ import pandas as pd
 # FIXED λ_prune, λ_div PER DATASET
 # ===============================================================
 LAMBDA_CONFIG = {
-    "slice": (1.2, 0.3),
-    "3droad": (1.2, 0.3),
+    "slice": (1.5, 0.3),
+    "3droad": (1.5, 0.3),
     "kin40k": (1.5, 0.3),
     "parkinsons": (1.2, 0.3),
     "solar": (1.0, 0.3),
@@ -35,7 +36,7 @@ LAMBDA_CONFIG = {
     "tamielectric": (1.0, 0.3),
 
     # NEW regression datasets
-    "song": (1.2, 0.3),
+    
     "keggundirected": (1.2, 0.3),
     "pol": (1.2, 0.3),
 
@@ -72,8 +73,8 @@ def evaluate_with_meta_weights(ensemble, selected_indices):
     if len(selected_indices) == 0:
         return None
 
-    X_eval = ensemble.X_eval_meta
-    y_eval = ensemble.y_eval_meta
+    X_eval = ensemble.X_train_meta
+    y_eval = ensemble.y_train_meta
     X_test = ensemble.X_test
     y_test = ensemble.y_test
 
@@ -109,7 +110,8 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
     linear_meta.prune()
-
+    linear_meta.evaluate()
+    
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     results = {"SHAP/Linear": evaluate_with_meta_weights(ensemble, shap_indices)}
 
@@ -120,6 +122,8 @@ def run_all_methods_once(ensemble, dataset_name):
         "EarlyStop": EarlyStopPruning("regression"),
         "Kappa": KappaPruning("regression"),
         "KT": KTPruning("regression"),
+        
+        
     }
 
     X_meta, y_meta = ensemble.X_train_meta, ensemble.y_train_meta
@@ -133,14 +137,11 @@ def run_all_methods_once(ensemble, dataset_name):
 
 
 # ===============================================================
-# METHOD B — Run pruning 10 times BUT reuse single trained ensemble
+# METHOD B — Run pruning 10 times AND create new base trees each time
 # ===============================================================
 def run_methods_for_dataset_10_times(X, y, dataset_name):
 
-    print(f"\n=== Training base ensemble ONCE for dataset: {dataset_name} ===")
-
-    ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="regression")
-    ensemble.train_base_trees()
+    print(f"\n=== Training base ensemble 10× for dataset: {dataset_name} ===")
 
     scores = {
         "SHAP/Linear": [],
@@ -153,6 +154,14 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 
     for run in range(10):
         print(f"[Run {run+1}/10] {dataset_name}")
+
+        # ------------------------------------------------------
+        # NEW: Create a fresh ensemble & train base trees EACH RUN
+        # ------------------------------------------------------
+        ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="regression")
+        ensemble.train_base_trees()
+        # ------------------------------------------------------
+
         results_once = run_all_methods_once(ensemble, dataset_name)
 
         for method in scores:
@@ -167,10 +176,11 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 def main():
 
     regression_sets = [
+        "protein", "tamielectric",
+         "keggundirected", "pol",
         "slice", "3droad", "kin40k",
         "parkinsons", "solar", "elevators",
-        "protein", "tamielectric",
-        "song", "keggundirected", "pol",
+        
     ]
 
     final_rows = []

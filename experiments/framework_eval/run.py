@@ -15,20 +15,20 @@ from src.LinearMetaModel import LinearMetaModel
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": [0.7 , 1.0 ,1.2],
-        "lambda_div":   [0.0 ,0.5 , 0.3 ,0.1],
+        "lambda_prune": [1.0 ,1.5 , 2.0 ],
+        "lambda_div":   [0.3 , 0.1 ,0.5 ,0.7 ],
         "prune_threshold": 0.01,
         "corr_threshold": 0.98,
     },
     "3droad": {
-         "lambda_prune": [0.0 ,1.0],
-        "lambda_div":   [0.0 ,0.3],
+         "lambda_prune": [2.5 ,2.0 ,1.5 ,1.0],
+        "lambda_div":   [0.3 , 0.1 , 0.5 ,0.7],
         "prune_threshold": 0.01,
         "corr_threshold": 0.9,
     },
     "kin40k": {
-         "lambda_prune": [0.0 ,0.7],
-        "lambda_div":   [0.0 ,0.5 ],
+         "lambda_prune": [2.5 ,2.0 ,1.5 ,1.0],
+        "lambda_div":   [0.3 ,0.2 ,0.5 ,0.7],
         "prune_threshold": 0.01,
         "corr_threshold": 0.93,
     },
@@ -119,19 +119,19 @@ def run_linear_grid(
 
                 # ==== FULL METRICS ====
                 "full_metric": full_metrics["main"],
-                "full_r2":  full_metrics["r2"],
+                
                 "full_f1":  full_metrics["f1"],
                 "full_auc": full_metrics["auc"],
 
                 # ==== PRE (SHAP) METRICS ====
                 "pre_pruned_metric": pre_metrics["main"],
-                "pre_r2":  pre_metrics["r2"],
+               
                 "pre_f1":  pre_metrics["f1"],
                 "pre_auc": pre_metrics["auc"],
 
                 # ==== FINAL (LINEAR) METRICS ====
                 "final_pruned_metric": final_metric,
-                "final_r2":  final_r2,
+                
                 "final_f1":  final_f1,
                 "final_auc": final_auc,
 
@@ -175,7 +175,7 @@ def process_dataset(X, y, dataset_name, data_type):
 
     pre_metrics = {
         "main": pre_metric,
-        "r2":   basic.r2 if data_type == "regression" else None,
+       
         "f1":   basic.f1 if data_type == "classification" else None,
         "auc":  basic.auc if data_type == "classification" else None
     }
@@ -197,7 +197,7 @@ def process_dataset(X, y, dataset_name, data_type):
 
 def main():
 
-    regression_sets = ["slice"]
+    regression_sets = ["kin40k" ,"slice", "3droad"]
     classification_sets = []
 
     for ds in regression_sets:
