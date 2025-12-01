@@ -93,8 +93,8 @@ class BasicMetaModel(BaseMetaModel):
         rmse_scores = np.array(rmse_scores)
         rmse_scores = 1 / (rmse_scores + 1e-12)
 
-        combined = 0.5 * (tree_importance / (np.max(tree_importance) + 1e-12)) + \
-                   0.5 * (rmse_scores / (np.max(rmse_scores) + 1e-12))
+        combined =   (tree_importance / (np.max(tree_importance) + 1e-12)) + \
+                    0.4 * (rmse_scores / (np.max(rmse_scores) + 1e-12))
 
         self.tree_importance = combined
 

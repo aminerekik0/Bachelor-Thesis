@@ -15,20 +15,20 @@ from src.LinearMetaModel import LinearMetaModel
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": [1.0 ,1.5 , 2.0 ],
-        "lambda_div":   [0.3 , 0.1 ,0.5 ,0.7 ],
+        "lambda_prune": [1.2],
+        "lambda_div":   [0.3],
         "prune_threshold": 0.01,
         "corr_threshold": 0.98,
     },
     "3droad": {
-         "lambda_prune": [2.5 ,2.0 ,1.5 ,1.0],
-        "lambda_div":   [0.3 , 0.1 , 0.5 ,0.7],
+         "lambda_prune": [1.0],
+        "lambda_div":   [0.5],
         "prune_threshold": 0.01,
-        "corr_threshold": 0.9,
+        "corr_threshold": 0.92,
     },
     "kin40k": {
-         "lambda_prune": [2.5 ,2.0 ,1.5 ,1.0],
-        "lambda_div":   [0.3 ,0.2 ,0.5 ,0.7],
+         "lambda_prune": [1.5],
+        "lambda_div":   [0.3],
         "prune_threshold": 0.01,
         "corr_threshold": 0.93,
     },
@@ -49,7 +49,7 @@ DATASET_CONFIG = {
 # ============================================================
 
 
-def append_to_csv(row, filename="results_2.0.csv"):
+def append_to_csv(row, filename="results_3.0.csv"):
     write_header = not os.path.exists(filename)
 
     with open(filename, "a", newline="") as f:

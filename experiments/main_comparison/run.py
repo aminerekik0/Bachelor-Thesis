@@ -129,7 +129,7 @@ def evaluate_subset(trees, workflow, data_type):
         return {"main": acc, "r2": None, "f1": f1, "auc": auc}
 
 
-def correlation_prune(trees_list, workflow, data_type, corr_thresh, importance=None):
+def correlation_prune(trees_list, workflow, data_type, corr_thresh = 0.95, importance=None):
     """
     Correlation-based pruning:
     - Compute correlations between tree predictions on X_eval_meta.

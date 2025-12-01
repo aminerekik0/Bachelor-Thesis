@@ -84,13 +84,10 @@ class LinearMetaModel(BaseMetaModel):
         mean_error = error.mean() + epsilon
         error_weight = error / mean_error
 
-        
-
-       
 
         #here remove error weight if needed to get the original formula
         
-        return torch.mean(entropy_per_sample * error_weight)
+        return torch.mean(entropy_per_sample *error_weight)
 
     @staticmethod
     def _loss_diversity(shap_vals_t, epsilon=1e-8):
@@ -186,7 +183,7 @@ class LinearMetaModel(BaseMetaModel):
             self.w_final = np.zeros_like(w_final_abs)
         print(f"[INFO] LinearMetaModel training complete. Final loss: {self.final_total_loss:.4f}")
 
-    def prune(self, prune_threshold=0.01, corr_thresh=1):
+    def prune(self, prune_threshold=0.01, corr_thresh=0.95):
         if self.w_final is None:
             print("[ERROR] Call train() before prune()")
             return
