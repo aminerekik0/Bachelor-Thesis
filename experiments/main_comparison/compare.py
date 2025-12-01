@@ -249,7 +249,6 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 def main():
 
     regression_sets = [
-        "protein" ,
         "slice",
      "3droad" ,
     "kin40k",
