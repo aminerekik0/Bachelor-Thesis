@@ -5,7 +5,7 @@ from copy import deepcopy
 class ConstructiveWithExploration:
     """
     Constructive With Exploration (CwE) ensemble selection.
-    Evaluates all remaining candidates at each step.
+
     """
     def __init__(self, data_type="regression", metric=None):
         self.data_type = data_type
@@ -25,7 +25,7 @@ class ConstructiveWithExploration:
         predictions_list = [np.array(p) for p in predictions_list]
         n_models = len(predictions_list)
 
-        # Step 1: Evaluate individual models
+
         individual_scores = [self._evaluate_ensemble([p], y_true) for p in predictions_list]
         sorted_indices = list(np.argsort(individual_scores)[::-1])
 
@@ -42,12 +42,12 @@ class ConstructiveWithExploration:
                     best_score = score
                     best_idx = idx
 
-            # Stop if no improvement
+
             prev_score = self._evaluate_ensemble(selected_preds, y_true) if selected_preds else -np.inf
             if best_score <= prev_score:
                 break
 
-            # Add the best candidate
+
             selected_preds.append(predictions_list[best_idx])
             selected_indices.append(best_idx)
             sorted_indices.remove(best_idx)
