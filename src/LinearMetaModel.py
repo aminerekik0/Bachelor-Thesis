@@ -50,10 +50,15 @@ class LinearMetaModel(BaseMetaModel):
         self.acc = None
         self.r2 = None
 
-    def _get_meta_features(self, X, trees_list):
+    def _get_meta_features(self, X, trees_list, use_proba=True):
         if not trees_list:
             raise ValueError("trees_list cannot be empty.")
-        return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
+        if self.data_type == "classification" and use_proba:
+        # For binary, use probability of class 1
+           return np.column_stack([t.predict_proba(X)[:,1] for t in trees_list]).astype(np.float32)
+
+        else:
+           return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
 
     @staticmethod
     def _loss_accuracy(shap_vals_t, y_true_t, y_pred_t):
@@ -111,6 +116,7 @@ class LinearMetaModel(BaseMetaModel):
         self.pruned_trees = pruned_trees_list
 
         X_train = self._get_meta_features(self.workflow.X_train_meta, self.pruned_trees)
+
         y_train = self.workflow.y_train_meta
         X_eval = self._get_meta_features(self.workflow.X_eval_meta, self.pruned_trees)
         y_eval = self.workflow.y_eval_meta
@@ -210,7 +216,7 @@ class LinearMetaModel(BaseMetaModel):
 
         print(f"[INFO] LinearMetaModel training complete. Final loss: {self.final_total_loss:.4f}")
 
-    def prune(self, prune_threshold=0.01, corr_thresh=0.95):
+    def prune(self, prune_threshold=0.01, corr_thresh=0.997):
         if self.w_final is None:
             print("[ERROR] Call train() before prune()")
             return
@@ -235,7 +241,8 @@ class LinearMetaModel(BaseMetaModel):
 
         self.kept_after_weight_pruning = list(keep_idx_weights)
 
-        print("Kept count:", len(keep_idx_weights))
+
+
 
         # Proceed with Correlation Pruning (Same for both L1 and SHAP)
         if len(keep_idx_weights) > 1:
@@ -252,6 +259,7 @@ class LinearMetaModel(BaseMetaModel):
             keep_idx = keep_idx_weights
 
         self.pruned_trees = [initial_tree_list[i] for i in keep_idx]
+
         self.pruned_exp = True
 
     def evaluate(self):

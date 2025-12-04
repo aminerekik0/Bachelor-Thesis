@@ -21,18 +21,30 @@ warnings.filterwarnings("ignore")
 # FIXED λ_prune, λ_div PER DATASET
 # ===============================================================
 LAMBDA_CONFIG = {
-    "slice": (1.0, 0.3),
-    "3droad": (1.0, 0.3),
+    "slice": (1.2, 0.3),
+    "3droad": (1.2, 0.3),
     "kin40k": (1.2, 0.3),
-    "parkinsons": (1.2, 0.3),
-    "solar": (0.8, 0.3),
-    "elevators": (1.0, 0.3),
-    "protein": (1.0, 0.3),
-    "tamielectric": (1.0, 0.3),
+    "solar": (1.2, 0.3),
+    "elevators": (1.2, 0.3),
+    "protein": (1.2, 0.3),
+    "tamielectric": (1.2, 0.3),
     "keggundirected": (1.2, 0.3),
-    "pol": (0.8, 0.3),
-    "covertype": (1.0, 0.5),
-    "higgs": (0.7, 0.5),
+    "pol": (1.2, 0.3),
+    "keggdirected": (1.2, 0.3),
+
+}
+CORR_THRESH_CONFIG = {
+    "slice": 0.98,
+    "3droad": 0.95,
+    "kin40k": 0.95,
+    "parkinsons": 0.95,
+    "solar": 0.95,
+    "elevators": 0.95,
+    "protein": 0.95,
+    "tamielectric": 0.95,
+    "keggundirected": 0.997,
+    "pol": 0.95,
+    "keggdirected": 0.997,
 }
 
 # ===============================================================
@@ -65,7 +77,7 @@ def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, 
 # HELPER 2: Auto-Tune External L1 (The "Second L1")
 # ===============================================================
 def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, tolerance=5):
-    alphas_to_try = [0.01, 0.05, 0.1, 0.2, 0.5 ,0.65 , 0.68 , 0.7 , 0.9]
+    alphas_to_try = [0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 0.58, 0.65, 0.68, 0.8]
     best_alpha = 0.005
     best_diff = float('inf')
 
@@ -76,6 +88,10 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
             _, selected = method.select(base_preds, y_meta)
 
             size = len(selected) if selected is not None else 0
+
+            if size == 0:
+                continue
+                # -
             diff = abs(size - target_size)
 
             if diff < best_diff:
@@ -84,6 +100,8 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
 
             if diff <= tolerance:
                 break
+
+
         except Exception as e:
             return 0.01
 
@@ -161,6 +179,7 @@ def run_all_methods_once(ensemble, dataset_name):
 
     # 1. Setup
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.3))
+    corr_thresh_val = CORR_THRESH_CONFIG.get(dataset_name, 0.95)
     basic = BasicMetaModel("regression")
     basic.attach_to(ensemble)
     basic.train()
@@ -170,24 +189,26 @@ def run_all_methods_once(ensemble, dataset_name):
     base_preds = [t.predict(X_meta) for t in basic.pruned_trees]
     orginal_preds = [t.predict(X_meta) for t in ensemble.individual_trees]
 
-    # --- METHOD 1: SHAP/Linear (Your Method) ---
+    # --- METHOD 1: SHAP/Linear  ---
     print(f"\n--- [SHAP] Training Proposed Method (λ={λ_shap}) ---")
-    linear_meta = LinearMetaModel(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=200)
+    print(f" {λ_div}=λ_div λ_prune={λ_shap}")
+    linear_meta = LinearMetaModel(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap ,epochs=200)
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
-    linear_meta.prune(prune_threshold=0.01)
+    linear_meta.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
+
 
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     target_size = len(shap_indices)
 
-    # --- METHOD 2: L1/Linear (Your PyTorch Baseline) ---
+    # --- METHOD 2: L1/Linear  ---
     print(f"\n--- [L1/Linear] Tuning to match size ({target_size} trees) ---")
     tuned_l1 = find_best_lambda_for_target_size(ensemble, basic.pruned_trees, target_size)
 
     linear_meta_l1 = LinearMetaModel(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=200)
     linear_meta_l1.attach_to(ensemble)
     linear_meta_l1.train(basic.pruned_trees)
-    linear_meta_l1.prune(prune_threshold=0.01)
+    linear_meta_l1.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
     l1_indices = [ensemble.individual_trees.index(t) for t in linear_meta_l1.pruned_trees]
 
 
@@ -248,9 +269,10 @@ def run_all_methods_once(ensemble, dataset_name):
     from L1_reg import L1PruningClassifier
 
     try:
-        print("best lambda" , best_alpha_ext)
+
         l1_ext_method = L1PruningClassifier(l_reg=best_alpha_ext , task="regression")
         _, l1_ext_sel = l1_ext_method.select(orginal_preds, y_meta)
+
 
         l1_ext_indices = []
         if l1_ext_sel:
@@ -330,7 +352,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
     scores = {m: [] for m in method_list}
     size_lists = {m: [] for m in method_list}
 
-    for run in range(1):
+    for run in range(10):
         print(f"\n>> Run {run+1}/10")
         ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="regression")
         ensemble.train_base_trees()
@@ -348,7 +370,16 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 # ===============================================================
 def main():
     regression_sets = [
+        "keggdirected",
+        "keggundirected",
         "kin40k",
+        "solar",
+
+        "protein",
+        "tamielectric",
+        "pol",
+        "slice",
+        "3droad"
     ]
 
     dataset_summary_rows = []
@@ -391,6 +422,9 @@ def main():
     rows = []
     for method, vals in global_wlt.items():
         rows.append({"method": method, **vals})
+
+    df_wlt = pd.DataFrame(rows)
+    df_wlt.to_csv("GLOBAL_win_loss_tie.csv", index=False)
 
     print("\n======================================")
     print(" GLOBAL WIN / LOSS / TIE SUMMARY")

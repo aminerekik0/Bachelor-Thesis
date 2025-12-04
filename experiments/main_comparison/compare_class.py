@@ -12,9 +12,16 @@ import numpy as np
 import pandas as pd
 import warnings
 import math
+import sys
+from Datasets import get_dataset
 
-# Suppress warnings
+
+
+
+
 warnings.filterwarnings("ignore")
+
+
 
 # ===============================================================
 # EMBEDDED: GreedyPruningClassifier & Metrics
@@ -93,8 +100,28 @@ class GreedyPruningClassifier(BaseEstimator, ClassifierMixin):
 # ===============================================================
 # CONFIG & HELPERS
 # ===============================================================
-LAMBDA_CONFIG = {
-    "covertype": (1.0, 0.5),
+LAMBDA_CONFIG ={
+    "magic": (1.2, 0.5),
+    "adult": (1.2, 0.5),
+    "letter": (1.2, 0.5),
+    "jm1": (1.2, 0.5),
+    "nursery": (1.2, 0.5),
+    "har": (1.2, 0.5),
+    "connect": (1.2, 0.5),
+    "weather": (1.2, 0.5),
+
+}
+
+# Correlation threshold config (example values, adjust if needed)
+CORR_THRESHOLD_CONFIG = {
+    "magic": 0.95,
+    "adult": 0.95,
+    "letter": 0.95,
+    "jm1": 0.95,
+    "nursery": 0.95,
+    "har": 0.997,
+    "connect": 0.95,
+    "weather": 0.95,
 
 }
 
@@ -127,6 +154,10 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
             method = L1PruningClassifier(l_reg=alpha)
             _, selected = method.select(base_preds, y_meta)
             size = len(selected) if selected is not None else 0
+
+            if size == 0:
+                continue
+
             diff = abs(size - target_size)
             if diff < best_diff:
                 best_diff = diff
@@ -176,6 +207,7 @@ def compute_dataset_wlt(dataset_summary):
 # ===============================================================
 def run_all_methods_once(ensemble, dataset_name):
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.5))
+    corr_thresh = CORR_THRESHOLD_CONFIG.get(dataset_name , 0.95)
     basic = BasicMetaModel("classification")
     basic.attach_to(ensemble)
     basic.train()
@@ -194,7 +226,7 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta = LinearMetaModel(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=100)
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
-    linear_meta.prune(prune_threshold=0.01)
+    linear_meta.prune(prune_threshold=0.01, corr_thresh= corr_thresh)
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     target_size = len(shap_indices) if len(shap_indices) > 2 else 5
 
@@ -204,11 +236,11 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta_l1 = LinearMetaModel(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=100)
     linear_meta_l1.attach_to(ensemble)
     linear_meta_l1.train(basic.pruned_trees)
-    linear_meta_l1.prune(prune_threshold=0.01)
+    linear_meta_l1.prune(prune_threshold=0.01 ,  corr_thresh= corr_thresh)
     l1_indices = [ensemble.individual_trees.index(t) for t in linear_meta_l1.pruned_trees]
 
     # 3. L1 External
-    print(f"--- [L1 External] Tuning... ---")
+    print(f"--- [L1 External] Tuning to size {target_size} ---")
     best_alpha = find_best_alpha_for_external_l1(ensemble, original_preds_proba, y_meta, target_size)
     try:
         from L1_reg import L1PruningClassifier
@@ -253,16 +285,16 @@ def run_all_methods_once(ensemble, dataset_name):
     sizes = {
         "SHAP/Linear": len(shap_indices), "L1/Linear": len(l1_indices),
         "L1": len(l1_ext_idx), "RE": len(re_idx),
-        "Individual Contribution": len(ic_idx), "DREP": len(drep_idx), "RF": 200
+        "COMP": len(ic_idx), "DREP": len(drep_idx), "RF": 200
     }
     return results, sizes
 
 def run_methods_for_dataset_10_times(X, y, dataset_name):
     print(f"\n=== DATASET: {dataset_name} ===")
-    methods = ["SHAP/Linear", "L1/Linear", "L1", "RE", "Individual Contribution", "DREP", "RF"]
+    methods = ["SHAP/Linear", "L1/Linear", "L1", "RE", "COMP", "DREP", "RF"]
     scores = {m: [] for m in methods}
     sizes = {m: [] for m in methods}
-    for run in range(1):
+    for run in range(5):
         print(f">> Run {run+1}/10")
         ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="classification")
         ensemble.train_base_trees()
@@ -273,21 +305,18 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
     return scores, sizes
 
 def main():
-    datasets = ["covertype"]
+    datasets = [
+        "eeg", "elec" ,"magic", "adult", "bank",
+
+    ]
     summary_rows = []
     size_rows = []
     for ds in datasets:
         try:
-            if ds == "covertype":
-                from sklearn.datasets import fetch_covtype
-                data = fetch_covtype(as_frame=False)
-                X = data.data
-                y = (data.target == 2).astype(int) # Binary task
-            else:
-                data = Dataset(ds)
-                X = data.x.astype(np.float32)
-                y = data.y.ravel().astype(int)
+            print(f"\n=== DATASET: {ds} ===")
+            X, y = get_dataset(ds)  # Get X, y unsplit
 
+            # Run ensemble methods
             scores, size_lists = run_methods_for_dataset_10_times(X, y, ds)
             for m, vals in scores.items():
                 summary_rows.append({"dataset": ds, "method": m, "mean_acc": np.nanmean(vals), "std_acc": np.nanstd(vals)})
@@ -299,10 +328,19 @@ def main():
     wlt = compute_dataset_wlt(summary_rows)
     pd.DataFrame(summary_rows).to_csv("results_acc_final_class.csv", index=False)
 
-    print("\n=== GLOBAL WINS/LOSSES (ACCURACY) ===")
+    pd.DataFrame(size_rows).to_csv("results_size_final_class.csv", index=False)
+
     rows = []
-    for m, vals in wlt.items(): rows.append({"method": m, **vals})
-    print(pd.DataFrame(rows))
+    for method, vals in wlt.items():
+        rows.append({"method": method, **vals})
+
+    df_wlt = pd.DataFrame(rows)
+    df_wlt.to_csv("GLOBAL_win_loss_tie.csv", index=False)
+
+    print("\n======================================")
+    print(" GLOBAL WIN / LOSS / TIE SUMMARY")
+    print("======================================")
+    print(df_wlt)
 
 if __name__ == "__main__":
     main()

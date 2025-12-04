@@ -75,8 +75,12 @@ class BasicMetaModel(BaseMetaModel):
 
         self._prune_trees_by_shap()
 
-    def _get_meta_features(self, X, trees_list):
-        return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
+    def _get_meta_features(self, X, trees_list, use_proba=True):
+        if use_proba and self.data_type == "classification":
+            # shape: (n_samples, n_trees * n_classes)
+            return np.column_stack([t.predict_proba(X)[:,1] for t in trees_list]).astype(np.float32)
+        else:
+            return np.column_stack([t.predict(X) for t in trees_list]).astype(np.float32)
 
     def _prune_trees_by_shap(self):
         shap_vals_for_importance = self.shap_values

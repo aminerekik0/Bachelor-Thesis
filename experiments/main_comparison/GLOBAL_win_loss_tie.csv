@@ -1,9 +1,9 @@
 method,win,loss,tie
-MethodC_Corr_then_SHAP,8,34,21
-SHAP/Linear,20,20,23
-ADP,12,28,23
-CwE,41,1,21
-EarlyStop,36,6,21
-Pw-oE,21,20,22
-MethodB_SHAP_then_Corr,11,28,24
-RF,21,33,9
+SHAP/Linear,27,30,6
+MethodC_Corr_then_SHAP,14,37,12
+RE,44,3,16
+L1,9,44,10
+Individual Contribution,49,0,14
+L1/Linear,29,26,8
+MethodB_SHAP_then_Corr,18,35,10
+RF,22,37,4
