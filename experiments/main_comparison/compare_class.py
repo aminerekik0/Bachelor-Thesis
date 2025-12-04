@@ -101,14 +101,14 @@ class GreedyPruningClassifier(BaseEstimator, ClassifierMixin):
 # CONFIG & HELPERS
 # ===============================================================
 LAMBDA_CONFIG ={
-    "magic": (1.2, 0.5),
-    "adult": (1.2, 0.5),
-    "letter": (1.2, 0.5),
-    "jm1": (1.2, 0.5),
-    "nursery": (1.2, 0.5),
-    "har": (1.2, 0.5),
-    "connect": (1.2, 0.5),
-    "weather": (1.2, 0.5),
+    "magic": (1.4, 0.5),
+    "adult": (1.4, 0.5),
+    "letter": (1.4, 0.5),
+    "jm1": (1.4, 0.5),
+    "nursery": (1.4, 0.5),
+    "har": (1.4, 0.5),
+    "connect": (1.4, 0.5),
+    "weather": (1.4, 0.5),
 
 }
 
@@ -306,7 +306,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 
 def main():
     datasets = [
-        "eeg", "elec" ,"magic", "adult", "bank",
+        "eeg", "elec" ,"magic", "adult", "bincovtype", "bank",
 
     ]
     summary_rows = []
