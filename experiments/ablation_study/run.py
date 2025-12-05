@@ -5,9 +5,9 @@ import sys, os
 
 
 
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
+from src.EnsembleCreator import EnsembleCreator
+from src.PrePruner import PrePruner
+from src.MetaOptimizer import MetaOptimizer
 
 
 # ============================================================
@@ -74,7 +74,7 @@ def run_linear_grid(
     for lp in grid_lambda_prune:
         for ld in grid_lambda_div:
 
-            model = LinearMetaModel(
+            model = MetaOptimizer(
                 λ_prune=lp,
                 λ_div=ld,
                 data_type=data_type
@@ -161,7 +161,7 @@ def run_linear_grid(
 
 def process_dataset(X, y, dataset_name, data_type):
 
-    workflow = ExplainableTreeEnsemble(
+    workflow = EnsembleCreator(
         X=X,
         y=y,
         data_type=data_type
@@ -182,7 +182,7 @@ def process_dataset(X, y, dataset_name, data_type):
     }
 
     # ---- BASIC STAGE (SHAP PRUNING) ----
-    basic = BasicMetaModel(data_type=data_type)
+    basic = PrePruner(data_type=data_type)
     basic.attach_to(workflow)
     basic.train()
     pre_metric, _ = basic.evaluate()

@@ -1,7 +1,7 @@
 from experiments.main_comparison.run import correlation_prune, shap_prune_on_subset
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+from src.PrePruner import PrePruner
+from src.MetaOptimizer import MetaOptimizer
+from src.EnsembleCreator import EnsembleCreator
 from uci_datasets import Dataset
 from sklearn.metrics import mean_squared_error, accuracy_score
 from sklearn.linear_model import LinearRegression
@@ -56,7 +56,7 @@ def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, 
     best_diff = float('inf')
 
     for l_val in lambdas_to_try:
-        temp_model = LinearMetaModel(mode="L1", λ_prune=l_val, λ_div=0.0, epochs=50, lr=1e-2)
+        temp_model = MetaOptimizer(mode="L1", λ_prune=l_val, λ_div=0.0, epochs=50, lr=1e-2)
         temp_model.attach_to(ensemble)
         temp_model.train(basic_pruned_trees)
 
@@ -180,7 +180,7 @@ def run_all_methods_once(ensemble, dataset_name):
     # 1. Setup
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.3))
     corr_thresh_val = CORR_THRESH_CONFIG.get(dataset_name, 0.95)
-    basic = BasicMetaModel("regression")
+    basic = PrePruner("regression")
     basic.attach_to(ensemble)
     basic.train()
 
@@ -192,7 +192,7 @@ def run_all_methods_once(ensemble, dataset_name):
     # --- METHOD 1: SHAP/Linear  ---
     print(f"\n--- [SHAP] Training Proposed Method (λ={λ_shap}) ---")
     print(f" {λ_div}=λ_div λ_prune={λ_shap}")
-    linear_meta = LinearMetaModel(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap ,epochs=200)
+    linear_meta = MetaOptimizer(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=200)
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
     linear_meta.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
@@ -205,7 +205,7 @@ def run_all_methods_once(ensemble, dataset_name):
     print(f"\n--- [L1/Linear] Tuning to match size ({target_size} trees) ---")
     tuned_l1 = find_best_lambda_for_target_size(ensemble, basic.pruned_trees, target_size)
 
-    linear_meta_l1 = LinearMetaModel(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=200)
+    linear_meta_l1 = MetaOptimizer(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=200)
     linear_meta_l1.attach_to(ensemble)
     linear_meta_l1.train(basic.pruned_trees)
     linear_meta_l1.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
@@ -354,7 +354,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 
     for run in range(10):
         print(f"\n>> Run {run+1}/10")
-        ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="regression")
+        ensemble = EnsembleCreator(X=X, y=y, data_type="regression")
         ensemble.train_base_trees()
 
         one_results, one_sizes = run_all_methods_once(ensemble, dataset_name)
@@ -416,8 +416,8 @@ def main():
     global_wlt = compute_dataset_wlt(dataset_summary_rows)
 
     # Save
-    pd.DataFrame(dataset_summary_rows).to_csv("results_rmse_final_all.csv", index=False)
-    pd.DataFrame(dataset_size_rows).to_csv("results_sizes_final_all.csv", index=False)
+    pd.DataFrame(dataset_summary_rows).to_csv("results/results_rmse_final_all.csv", index=False)
+    pd.DataFrame(dataset_size_rows).to_csv("results/results_sizes_final_all.csv", index=False)
 
     rows = []
     for method, vals in global_wlt.items():

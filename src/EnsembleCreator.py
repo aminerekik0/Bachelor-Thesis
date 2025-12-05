@@ -3,36 +3,27 @@ from scipy import stats
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, f1_score
-from uci_datasets import Dataset
-
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
 
 
-class ExplainableTreeEnsemble:
+
+class EnsembleCreator:
     """
     Explainability-Driven Tree Ensemble.
     """
-    def __init__(self, X=None, y=None, dataset_name="slice", n_trees=200, max_depth=5,
-                 meta_estimators=50, meta_depth=5, learning_rate=0.05,
-                 lambda_prune=0.5, lambda_div=0.02, random_state=42, data_type="regression"):
+    def __init__(self, X=None, y=None,n_trees=200, max_depth="AUTO" , test_size=0.2, random_state=42, data_type="regression" ,r_bootstrap=0.7):
+
         self.X = X
         self.y = y
-        self.dataset_name = dataset_name
+
         self.n_trees = n_trees
         self.max_depth = max_depth
-        self.meta_estimators = meta_estimators
-        self.meta_depth = meta_depth
-        self.LAMBDA1 = lambda_prune
-        self.LAMBDA2 = lambda_div
+        self.test_size = test_size
         self.random_state = random_state
-        self.learning_rate = learning_rate
+        self.r_bootstrap = r_bootstrap
 
         self.individual_trees = []
         self.data_type = data_type
         self._prepare_data()
-        self.n_features = None
-        self.n_samples = None
 
         # Regression metrics
         self.mse = None
@@ -50,9 +41,9 @@ class ExplainableTreeEnsemble:
         X = self.X
         y = self.y
 
-        # 80/10/5/5 split
+
         X_train, X_temp, y_train, y_temp = train_test_split(
-            X, y, test_size=0.2, random_state=self.random_state
+            X, y, test_size=self.test_size, random_state=self.random_state
         )
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, random_state=self.random_state
@@ -76,12 +67,9 @@ class ExplainableTreeEnsemble:
         print("------------- Creating the Base Trees --------------")
 
         n_samples = self.X_train.shape[0]
-        self.n_samples = n_samples
-        self.n_features = self.X_train.shape[1]
-
         for i in range(self.n_trees):
 
-            indices = np.random.choice(n_samples, int(0.7 * n_samples), replace=True)
+            indices = np.random.choice(n_samples, int(self.r_bootstrap * n_samples), replace=True)
             X_sub, y_sub = self.X_train[indices], self.y_train[indices]
 
             n_features = X_sub.shape[1]
@@ -89,13 +77,13 @@ class ExplainableTreeEnsemble:
 
             if self.data_type == "regression":
                 trees = DecisionTreeRegressor(
-                    max_depth=np.random.choice([2, 5, 6 , 10 ,15]),
+                    max_depth = self.max_depth if self.max_depth !="AUTO" else np.random.choice([2, 5, 6, 10, 15]),
                     random_state=self.random_state + i,
                     max_features=n_features_subset,
                 )
             else:
                 trees = DecisionTreeClassifier(
-                    max_depth=np.random.choice([2, 5, 6 , 10 ,15]),
+                    max_depth = self.max_depth if self.max_depth != "AUTO" else np.random.choice([2, 5, 6, 10, 15]),
                     random_state=self.random_state + i,
                     max_features=n_features_subset,
                 )
@@ -119,8 +107,8 @@ class ExplainableTreeEnsemble:
             print("Full Ensemble RMSE:", self.rmse)
             print("Full Ensemble R2:", self.r2)
 
-            # Return consistent with BasicMetaModel + LinearMetaModel
-            return self.mse, self.rmse, self.mae, self.r2, None, None
+
+            return self.mse, self.rmse, self.mae, self.r2,
 
         else:
             tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
@@ -139,6 +127,6 @@ class ExplainableTreeEnsemble:
             print("Full Ensemble F1:", self.f1)
             print("Full Ensemble AUC:", self.auc)
 
-            # Return consistent metrics
-            return None, None, None, None, self.acc, self.f1
+
+            return self.acc, self.f1
 

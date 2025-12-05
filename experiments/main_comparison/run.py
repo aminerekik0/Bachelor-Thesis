@@ -17,9 +17,9 @@ from sklearn.metrics import (
 import sys
 
 
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
+from src.EnsembleCreator import EnsembleCreator
+from src.PrePruner import PrePruner
+from src.MetaOptimizer import MetaOptimizer
 
 
 # ============================================================
@@ -140,7 +140,13 @@ def correlation_prune(trees_list, workflow, data_type, corr_thresh = 0.95, impor
         return list(trees_list)
 
     X_eval = workflow.X_eval_meta
-    preds = get_meta_features(X_eval, trees_list)  # shape: (n_samples, n_trees)
+
+
+    if data_type == "classification":
+        preds = np.column_stack([t.predict_proba(X_eval)[:, 1] for t in trees_list])
+    else:
+        preds = np.column_stack([t.predict(X_eval) for t in trees_list])
+
     corr_matrix = np.corrcoef(preds.T)
     np.fill_diagonal(corr_matrix, 0)
 
@@ -235,7 +241,7 @@ def run_methods_for_dataset(X, y, dataset_name):
 
     # ---------- Create workflow & train base trees ----------
     print(X.shape , y.shape)
-    workflow = ExplainableTreeEnsemble(
+    workflow = EnsembleCreator(
         X=X,
         y=y,
         dataset_name=dataset_name,
@@ -261,7 +267,7 @@ def run_methods_for_dataset(X, y, dataset_name):
     #           COMMON STAGE 1: SHAP-BASED BASIC META
     #    (used by Method A and Method B)
     # ========================================================
-    basic = BasicMetaModel(data_type=task)
+    basic = PrePruner(data_type=task)
     basic.attach_to(workflow)
     basic.train()
     pre_metric, pre_aux = basic.evaluate()
@@ -282,7 +288,7 @@ def run_methods_for_dataset(X, y, dataset_name):
     # ========================================================
     print("\n----- METHOD A: Full framework (Stage1 SHAP + Stage2 Linear + corr) -----")
 
-    lm = LinearMetaModel(
+    lm = MetaOptimizer(
         λ_prune=cfg["lambda_prune"],
         λ_div=cfg["lambda_div"],
         data_type=task
@@ -443,7 +449,7 @@ def main():
     classification_sets = ["covertype"]
 
     for ds in classification_sets:
-        if ds == "covertype":
+        if ds == "covtype":
             from sklearn.datasets import fetch_covtype
             data = fetch_covtype(as_frame=False)
             X = data.data

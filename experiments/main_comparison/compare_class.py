@@ -1,7 +1,7 @@
-
-from src.BasicMetaModel import BasicMetaModel
-from src.LinearMetaModel import LinearMetaModel
-from src.ExplainableTreeEnsemble import ExplainableTreeEnsemble
+from experiments.main_comparison.run import correlation_prune, shap_prune_on_subset
+from src.PrePruner import PrePruner
+from src.MetaOptimizer import MetaOptimizer
+from src.EnsembleCreator import EnsembleCreator
 from uci_datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
@@ -101,14 +101,14 @@ class GreedyPruningClassifier(BaseEstimator, ClassifierMixin):
 # CONFIG & HELPERS
 # ===============================================================
 LAMBDA_CONFIG ={
-    "magic": (1.4, 0.5),
-    "adult": (1.4, 0.5),
-    "letter": (1.4, 0.5),
-    "jm1": (1.4, 0.5),
-    "nursery": (1.4, 0.5),
-    "har": (1.4, 0.5),
-    "connect": (1.4, 0.5),
-    "weather": (1.4, 0.5),
+    "magic": (1.2, 0.3),
+    "adult": (1.2, 0.3),
+    "letter": (1.2, 0.3),
+    "jm1": (1.2, 0.3),
+    "nursery": (1.2, 0.3),
+    "har": (1.2, 0.3),
+    "connect": (1.2, 0.3),
+    "weather": (1.2, 0.3),
 
 }
 
@@ -130,7 +130,7 @@ def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, 
     best_lambda = 0.01
     best_diff = float('inf')
     for l_val in lambdas_to_try:
-        temp_model = LinearMetaModel(mode="L1", λ_prune=l_val, λ_div=0.0, epochs=50, lr=1e-2)
+        temp_model = MetaOptimizer(mode="L1", λ_prune=l_val, λ_div=0.0, epochs=50, lr=1e-2)
         temp_model.attach_to(ensemble)
         temp_model.train(basic_pruned_trees)
         if temp_model.model is not None:
@@ -181,7 +181,7 @@ def compute_dataset_wlt(dataset_summary):
     methods = list(set([row["method"] for row in dataset_summary]))
     WLT = {m: {"win": 0, "loss": 0, "tie": 0} for m in methods}
     rows = dataset_summary
-    SQRT_N = math.sqrt(10)
+    SQRT_N = math.sqrt(5)
     for ds in set([r["dataset"] for r in rows]):
         ds_rows = [r for r in rows if r["dataset"] == ds]
         for i in range(len(methods)):
@@ -206,9 +206,9 @@ def compute_dataset_wlt(dataset_summary):
 # MAIN RUNNER
 # ===============================================================
 def run_all_methods_once(ensemble, dataset_name):
-    λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.5))
+    λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.2, 0.3))
     corr_thresh = CORR_THRESHOLD_CONFIG.get(dataset_name , 0.95)
-    basic = BasicMetaModel("classification")
+    basic = PrePruner( data_type="classification" , keep_ratio=0.25)
     basic.attach_to(ensemble)
     basic.train()
     X_meta, y_meta = ensemble.X_train_meta, ensemble.y_train_meta
@@ -223,7 +223,7 @@ def run_all_methods_once(ensemble, dataset_name):
 
     # 1. SHAP
     print(f"\n--- [SHAP] Training (λ={λ_shap}) ---")
-    linear_meta = LinearMetaModel(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=100)
+    linear_meta = MetaOptimizer(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=200)
     linear_meta.attach_to(ensemble)
     linear_meta.train(basic.pruned_trees)
     linear_meta.prune(prune_threshold=0.01, corr_thresh= corr_thresh)
@@ -233,7 +233,7 @@ def run_all_methods_once(ensemble, dataset_name):
     # 2. L1/Linear
     print(f"--- [L1/Linear] Tuning to size {target_size} ---")
     tuned_l1 = find_best_lambda_for_target_size(ensemble, basic.pruned_trees, target_size)
-    linear_meta_l1 = LinearMetaModel(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=100)
+    linear_meta_l1 = MetaOptimizer(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=200)
     linear_meta_l1.attach_to(ensemble)
     linear_meta_l1.train(basic.pruned_trees)
     linear_meta_l1.prune(prune_threshold=0.01 ,  corr_thresh= corr_thresh)
@@ -273,30 +273,83 @@ def run_all_methods_once(ensemble, dataset_name):
     rf.fit(ensemble.X_train, ensemble.y_train)
     rf_acc = accuracy_score(ensemble.y_test, rf.predict(ensemble.X_test))
 
+
+
+    corr_pruned_trees_B = correlation_prune(
+
+        basic.pruned_trees,
+
+        ensemble,
+
+        "classification",
+
+        importance=basic.pruned_tree_weights,
+
+        corr_thresh=corr_thresh
+
+    )
+
+    method_B_idx = [ensemble.individual_trees.index(t) for t in corr_pruned_trees_B]
+
+
+
+    corr_pruned_trees_C_stage1 = correlation_prune(
+
+        ensemble.individual_trees,
+
+        ensemble,
+
+        "classification",
+
+        corr_thresh=corr_thresh ,
+
+        importance=None,
+
+    )
+
+    corr_stage1_size = len(corr_pruned_trees_C_stage1)
+
+
+    # Step 2: SHAP pruning on this corr-pruned subset
+
+    shap_pruned_trees_C, _ = shap_prune_on_subset(
+
+        corr_pruned_trees_C_stage1,
+
+        ensemble,
+
+        data_type="classification",
+
+        keep_ratio=0.25,
+
+    )
+    method_C_idx = [ensemble.individual_trees.index(t) for t in shap_pruned_trees_C]
+
     results = {
         "SHAP/Linear": evaluate_with_meta_weights(ensemble, shap_indices),
         "L1/Linear": evaluate_with_meta_weights(ensemble, l1_indices),
         "L1": evaluate_with_meta_weights(ensemble, l1_ext_idx),
+        "corr -> SHAP" : evaluate_with_meta_weights(ensemble,method_C_idx ),
+        "SHAP -> corr" : evaluate_with_meta_weights(ensemble,method_B_idx ),
         "RE": evaluate_with_meta_weights(ensemble, re_idx),
-        "COMP": evaluate_with_meta_weights(ensemble, ic_idx),
         "DREP": evaluate_with_meta_weights(ensemble, drep_idx),
         "RF": rf_acc
     }
     sizes = {
         "SHAP/Linear": len(shap_indices), "L1/Linear": len(l1_indices),
-        "L1": len(l1_ext_idx), "RE": len(re_idx),
-        "COMP": len(ic_idx), "DREP": len(drep_idx), "RF": 200
+        "L1": len(l1_ext_idx), "corr -> SHAP" : len(method_C_idx), "SHAP -> corr" : len(method_B_idx), "RE": len(re_idx),
+        "DREP": len(drep_idx), "RF": 200
     }
     return results, sizes
 
 def run_methods_for_dataset_10_times(X, y, dataset_name):
     print(f"\n=== DATASET: {dataset_name} ===")
-    methods = ["SHAP/Linear", "L1/Linear", "L1", "RE", "COMP", "DREP", "RF"]
+    methods = ["SHAP/Linear", "L1/Linear", "L1", "corr -> SHAP" , "SHAP -> corr" ,"RE", "DREP", "RF"]
     scores = {m: [] for m in methods}
     sizes = {m: [] for m in methods}
     for run in range(5):
-        print(f">> Run {run+1}/10")
-        ensemble = ExplainableTreeEnsemble(X=X, y=y, data_type="classification")
+        print(f">> Run {run+1}/5")
+        ensemble = EnsembleCreator(X=X, y=y, data_type="classification")
         ensemble.train_base_trees()
         res, sz = run_all_methods_once(ensemble, dataset_name)
         for m in methods:
@@ -306,15 +359,38 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 
 def main():
     datasets = [
-        "eeg", "elec" ,"magic", "adult", "bincovtype", "bank",
+        "covtype" ,"higgs",
 
     ]
     summary_rows = []
     size_rows = []
     for ds in datasets:
         try:
-            print(f"\n=== DATASET: {ds} ===")
-            X, y = get_dataset(ds)  # Get X, y unsplit
+            if ds == "covtype":
+                from sklearn.datasets import fetch_covtype
+                data = fetch_covtype(as_frame=False)
+                X = data.data
+                y = (data.target == 2).astype(int)
+
+            elif ds == "higgs":
+                import os
+                import kagglehub
+                from kagglehub import KaggleDatasetAdapter
+                path = kagglehub.dataset_download("erikbiswas/higgs-uci-dataset")
+                csv_file = None
+                for file in os.listdir(path):
+                    if file.endswith(".csv"):
+                        csv_file = os.path.join(path, file)
+                        break
+                if csv_file is None:
+                    raise FileNotFoundError("No CSV file found in downloaded HIGGS dataset folder!")
+                import pandas as pd
+                df = pd.read_csv(csv_file, nrows=1000000)
+                y = df.iloc[:, 0].astype(int).values
+                X = df.iloc[:, 1:].astype("float32").values
+            else:
+                print(f"\n=== DATASET: {ds} ===")
+                X, y = get_dataset(ds)  # Get X, y unsplit
 
             # Run ensemble methods
             scores, size_lists = run_methods_for_dataset_10_times(X, y, ds)
@@ -326,16 +402,16 @@ def main():
             print(f"Skipping {ds}: {e}")
 
     wlt = compute_dataset_wlt(summary_rows)
-    pd.DataFrame(summary_rows).to_csv("results_acc_final_class.csv", index=False)
+    pd.DataFrame(summary_rows).to_csv("results/results_acc_final_class4.0.csv", index=False)
 
-    pd.DataFrame(size_rows).to_csv("results_size_final_class.csv", index=False)
+    pd.DataFrame(size_rows).to_csv("results/results_size_final_class_4.0.csv", index=False)
 
     rows = []
     for method, vals in wlt.items():
         rows.append({"method": method, **vals})
 
     df_wlt = pd.DataFrame(rows)
-    df_wlt.to_csv("GLOBAL_win_loss_tie.csv", index=False)
+    df_wlt.to_csv("GLOBAL_win_loss_tie4.0.csv", index=False)
 
     print("\n======================================")
     print(" GLOBAL WIN / LOSS / TIE SUMMARY")

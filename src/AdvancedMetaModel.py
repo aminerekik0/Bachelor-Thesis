@@ -8,7 +8,6 @@ from sklearn.metrics import accuracy_score
 class AdvancedMetaModel(BaseMetaModel):
 
     def __init__(self, num_iter=10, learning_rate=0.1, num_leaves=16,
-
                  lambda_prune=7, lambda_div=0.1 ,keep_ratio=0.15 ,
                  prune_loss_func="_prune_loss_weighted_L1",
                  div_loss_func="_diversity_loss_corr_based",

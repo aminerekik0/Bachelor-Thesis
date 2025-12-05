@@ -1,0 +1,9 @@
+method,win,loss,tie
+DREP,15,18,9
+RF,7,32,3
+RE,18,13,11
+SHAP/Linear,15,15,12
+L1/Linear,21,8,13
+SHAP -> corr,10,21,11
+L1,29,5,8
+corr -> SHAP,15,18,9

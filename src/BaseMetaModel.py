@@ -18,41 +18,6 @@ class BaseMetaModel(ABC):
         """Train the meta-model."""
         pass
 
-    @abstractmethod
-    def evaluate(self):
-        """Evaluate performance"""
-        pass
 
-    def save_results(self, filename=None):
-        """
-        Save the results of this model, including meta-model losses and full ensemble metrics.
-        Each model will have its own file if filename is not explicitly provided.
-        """
 
-        from datetime import datetime
-        import os
-        import pandas as pd
-        
-        if filename is None:
-           filename = f"{self.__class__.__name__}_results.csv"
-
-        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        df = pd.DataFrame({
-        "dataset": [self.workflow.dataset_name],
-        "data_type": [self.data_type],
-        "n_samples": [self.workflow.n_samples],
-        "n_features": [self.workflow.n_features],
-        "full_ensemble_mse": [getattr(self.workflow, 'mse', None)],
-        "pruned ensemble mse" :[getattr(self, 'pruned_ensemble_mse', None)] ,
-        "created" : current_timestamp
-    })
-
-    # Save to CSV (append if exists)
-        if os.path.exists(filename):
-           df.to_csv(filename, mode='a', header=False, index=False, float_format='%.4f')
-        else:
-           df.to_csv(filename, index=False, float_format='%.4f')
-
-        print(f"[INFO] Results saved to {filename}")
 

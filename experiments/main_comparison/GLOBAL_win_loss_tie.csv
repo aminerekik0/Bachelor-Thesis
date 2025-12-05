@@ -1,9 +1,0 @@
-method,win,loss,tie
-SHAP/Linear,27,30,6
-MethodC_Corr_then_SHAP,14,37,12
-RE,44,3,16
-L1,9,44,10
-Individual Contribution,49,0,14
-L1/Linear,29,26,8
-MethodB_SHAP_then_Corr,18,35,10
-RF,22,37,4

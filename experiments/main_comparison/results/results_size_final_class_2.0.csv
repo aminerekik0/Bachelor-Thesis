@@ -1,0 +1,25 @@
+dataset,method,mean_size
+eeg,SHAP/Linear,20.0
+eeg,L1/Linear,41.0
+eeg,L1,70.0
+eeg,corr -> SHAP,49.0
+eeg,SHAP -> corr,50.0
+eeg,RE,20.0
+eeg,DREP,20.0
+eeg,RF,200.0
+elec,SHAP/Linear,28.0
+elec,L1/Linear,27.0
+elec,L1,41.0
+elec,corr -> SHAP,45.0
+elec,SHAP -> corr,50.0
+elec,RE,28.0
+elec,DREP,28.0
+elec,RF,200.0
+magic,SHAP/Linear,26.0
+magic,L1/Linear,37.0
+magic,L1,43.0
+magic,corr -> SHAP,46.0
+magic,SHAP -> corr,50.0
+magic,RE,26.0
+magic,DREP,26.0
+magic,RF,200.0

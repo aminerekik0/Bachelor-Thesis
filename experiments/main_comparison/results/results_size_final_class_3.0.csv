@@ -1,0 +1,49 @@
+dataset,method,mean_size
+eeg,SHAP/Linear,23.2
+eeg,L1/Linear,34.0
+eeg,L1,61.2
+eeg,corr -> SHAP,48.6
+eeg,SHAP -> corr,50.0
+eeg,RE,23.2
+eeg,DREP,23.2
+eeg,RF,200.0
+elec,SHAP/Linear,20.2
+elec,L1/Linear,35.0
+elec,L1,36.2
+elec,corr -> SHAP,44.8
+elec,SHAP -> corr,48.4
+elec,RE,20.2
+elec,DREP,20.2
+elec,RF,200.0
+magic,SHAP/Linear,17.2
+magic,L1/Linear,31.0
+magic,L1,47.8
+magic,corr -> SHAP,46.8
+magic,SHAP -> corr,50.0
+magic,RE,17.2
+magic,DREP,17.2
+magic,RF,200.0
+adult,SHAP/Linear,19.6
+adult,L1/Linear,27.4
+adult,L1,71.2
+adult,corr -> SHAP,48.0
+adult,SHAP -> corr,50.0
+adult,RE,19.6
+adult,DREP,19.6
+adult,RF,200.0
+bincovtype,SHAP/Linear,14.8
+bincovtype,L1/Linear,27.4
+bincovtype,L1,35.6
+bincovtype,corr -> SHAP,40.8
+bincovtype,SHAP -> corr,47.2
+bincovtype,RE,14.8
+bincovtype,DREP,14.8
+bincovtype,RF,200.0
+bank,SHAP/Linear,27.8
+bank,L1/Linear,32.4
+bank,L1,38.8
+bank,corr -> SHAP,47.0
+bank,SHAP -> corr,49.8
+bank,RE,27.8
+bank,DREP,27.8
+bank,RF,200.0
