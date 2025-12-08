@@ -342,24 +342,15 @@ def run_all_methods_once(ensemble, dataset_name):
     }
     return results, sizes
 
-def run_methods_for_dataset_10_times(X, y, dataset_name):
-    print(f"\n=== DATASET: {dataset_name} ===")
-    methods = ["SHAP/Linear", "L1/Linear", "L1", "corr -> SHAP" , "SHAP -> corr" ,"RE", "DREP", "RF"]
-    scores = {m: [] for m in methods}
-    sizes = {m: [] for m in methods}
-    for run in range(5):
-        print(f">> Run {run+1}/5")
-        ensemble = EnsembleCreator(X=X, y=y, data_type="classification")
-        ensemble.train_base_trees()
-        res, sz = run_all_methods_once(ensemble, dataset_name)
-        for m in methods:
-            scores[m].append(res.get(m, np.nan))
-            sizes[m].append(sz.get(m, 0))
-    return scores, sizes
-
 def main():
     datasets = [
-        "covtype" ,"higgs",
+        "covtype" ,"higgs", "magic",
+    "adult",
+    "letter",    "jm1",
+    "nursery",
+    "har",
+    "connect",
+    "weather",
 
     ]
     summary_rows = []
@@ -417,6 +408,21 @@ def main():
     print(" GLOBAL WIN / LOSS / TIE SUMMARY")
     print("======================================")
     print(df_wlt)
+
+def run_methods_for_dataset_10_times(X, y, dataset_name):
+    print(f"\n=== DATASET: {dataset_name} ===")
+    methods = ["SHAP/Linear", "L1/Linear", "L1", "corr -> SHAP" , "SHAP -> corr" ,"RE", "DREP", "RF"]
+    scores = {m: [] for m in methods}
+    sizes = {m: [] for m in methods}
+    for run in range(5):
+        print(f">> Run {run+1}/5")
+        ensemble = EnsembleCreator(X=X, y=y, data_type="classification")
+        ensemble.train_base_trees()
+        res, sz = run_all_methods_once(ensemble, dataset_name)
+        for m in methods:
+            scores[m].append(res.get(m, np.nan))
+            sizes[m].append(sz.get(m, 0))
+    return scores, sizes
 
 if __name__ == "__main__":
     main()

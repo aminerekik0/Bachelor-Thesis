@@ -1,3 +1,5 @@
+from experiments.main_comparison.L1_reg import L1PruningClassifier
+from experiments.main_comparison.greedyPruningRegressor import ICPruningRegressor, REPruningRegressor
 from experiments.main_comparison.run import correlation_prune, shap_prune_on_subset
 from src.PrePruner import PrePruner
 from src.MetaOptimizer import MetaOptimizer
@@ -10,9 +12,6 @@ import numpy as np
 import pandas as pd
 import warnings
 import math
-
-# --- NEW IMPORTS ---
-from greedyPruningRegressor import REPruningRegressor, ICPruningRegressor
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -31,7 +30,6 @@ LAMBDA_CONFIG = {
     "keggundirected": (1.2, 0.3),
     "pol": (1.2, 0.3),
     "keggdirected": (1.2, 0.3),
-
 }
 CORR_THRESH_CONFIG = {
     "slice": 0.98,
@@ -51,7 +49,7 @@ CORR_THRESH_CONFIG = {
 # HELPER 1: Auto-Tune L1/Linear (Your PyTorch Model)
 # ===============================================================
 def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, tolerance=5):
-    lambdas_to_try = [ 0.01, 0.025, 0.05, 0.1, 0.2, 0.5]
+    lambdas_to_try = [0.01, 0.025, 0.05, 0.1, 0.2, 0.5]
     best_lambda = 0.01
     best_diff = float('inf')
 
@@ -91,7 +89,7 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
 
             if size == 0:
                 continue
-                # -
+
             diff = abs(size - target_size)
 
             if diff < best_diff:
@@ -100,7 +98,6 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
 
             if diff <= tolerance:
                 break
-
 
         except Exception as e:
             return 0.01
@@ -180,7 +177,7 @@ def run_all_methods_once(ensemble, dataset_name):
     # 1. Setup
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.3))
     corr_thresh_val = CORR_THRESH_CONFIG.get(dataset_name, 0.95)
-    basic = PrePruner("regression")
+    basic = PrePruner()
     basic.attach_to(ensemble)
     basic.train()
 
@@ -197,7 +194,6 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta.train(basic.pruned_trees)
     linear_meta.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
 
-
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     target_size = len(shap_indices)
 
@@ -211,71 +207,43 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta_l1.prune(prune_threshold=0.01 , corr_thresh = corr_thresh_val)
     l1_indices = [ensemble.individual_trees.index(t) for t in linear_meta_l1.pruned_trees]
 
-
     corr_pruned_trees_B = correlation_prune(
-
         basic.pruned_trees,
-
         ensemble,
-
         "regression",
-
         importance=basic.pruned_tree_weights,
-
         corr_thresh=0.95
-
     )
-
     method_B_idx = [ensemble.individual_trees.index(t) for t in corr_pruned_trees_B]
 
-
-
     corr_pruned_trees_C_stage1 = correlation_prune(
+        ensemble.individual_trees,
+        ensemble,
+        "regression",
+        corr_thresh=0.95 ,
+        importance=None,
+    )
 
-    ensemble.individual_trees,
-
-    ensemble,
-
-    "regression",
-
-    corr_thresh=0.95 ,
-
-    importance=None,
-
-)
-
-    corr_stage1_size = len(corr_pruned_trees_C_stage1)
-
-
-# Step 2: SHAP pruning on this corr-pruned subset
-
+    # Step 2: SHAP pruning on this corr-pruned subset
     shap_pruned_trees_C, _ = shap_prune_on_subset(
-
-    corr_pruned_trees_C_stage1,
-
-    ensemble,
-
-    data_type="regression",
-
-    keep_ratio=0.25,
-
-)
+        corr_pruned_trees_C_stage1,
+        ensemble,
+        data_type="regression",
+        keep_ratio=0.25,
+    )
     method_C_idx = [ensemble.individual_trees.index(t) for t in shap_pruned_trees_C]
 
     # --- METHOD 3: L1 (External Class Baseline) ---
     print(f"\n--- [L1 External] Tuning to match size ({target_size} trees) ---")
     best_alpha_ext = find_best_alpha_for_external_l1(ensemble, orginal_preds, y_meta, target_size)
 
-    from L1_reg import L1PruningClassifier
-
     try:
 
         l1_ext_method = L1PruningClassifier(l_reg=best_alpha_ext , task="regression")
         _, l1_ext_sel = l1_ext_method.select(orginal_preds, y_meta)
 
-
         l1_ext_indices = []
-        if l1_ext_sel:
+        if l1_ext_sel is not None:
             l1_ext_indices = list(l1_ext_sel)
     except Exception as e:
         print(f"[WARN] External L1 failed: {e}")
@@ -311,6 +279,48 @@ def run_all_methods_once(ensemble, dataset_name):
         rf.fit(ensemble.X_train, ensemble.y_train)
         rf_preds = rf.predict(ensemble.X_test)
         rf_metric = accuracy_score(ensemble.y_test, rf_preds)
+
+    # =========================================================
+    # PRINT DETAILED TREE PARAMS TABLE (Method A vs RE)
+    # =========================================================
+    print(f"\n\n{'='*80}")
+    print(f" DETAILED TREE ANALYSIS: {dataset_name}")
+    print(f"{'='*80}")
+
+    # Only inspecting Method A (Mine) and RE as requested
+    methods_to_inspect = {
+        "Method A (SHAP/Linear)": shap_indices,
+        "RE (Baseline)": re_indices
+    }
+
+    for m_name, indices in methods_to_inspect.items():
+        if not indices:
+            print(f"\n>> {m_name}: NO TREES SELECTED")
+            continue
+
+        print(f"\n>> {m_name} (Count: {len(indices)})")
+        print(f"{'TreeID':<8} | {'Depth':<6} | {'MaxFeat':<8} | {'RndState':<10} | {'TopFeature':<10}")
+        print("-" * 60)
+
+        # Sort indices to make the table readable
+        for idx in sorted(list(set(indices))):
+            tree = ensemble.individual_trees[idx]
+
+            # Get params
+            d = tree.max_depth
+            mf = tree.max_features
+            rs = tree.random_state
+
+            # Get most focused feature (Highest Importance)
+            if hasattr(tree, 'feature_importances_'):
+                # Using numpy to find the index of the max feature importance
+                top_feat_idx = np.argmax(tree.feature_importances_)
+            else:
+                top_feat_idx = "N/A"
+
+            print(f"{idx:<8} | {d:<6} | {str(mf):<8} | {rs:<10} | {top_feat_idx:<10}")
+        print("-" * 60)
+    print("\n")
 
     # --- Compile Results ---
     results = {
@@ -352,7 +362,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
     scores = {m: [] for m in method_list}
     size_lists = {m: [] for m in method_list}
 
-    for run in range(10):
+    for run in range(1):
         print(f"\n>> Run {run+1}/10")
         ensemble = EnsembleCreator(X=X, y=y, data_type="regression")
         ensemble.train_base_trees()
@@ -370,14 +380,9 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 # ===============================================================
 def main():
     regression_sets = [
-        "keggdirected",
-        "keggundirected",
-        "kin40k",
-        "solar",
 
-        "protein",
-        "tamielectric",
-        "pol",
+        "kin40k",
+
         "slice",
         "3droad"
     ]

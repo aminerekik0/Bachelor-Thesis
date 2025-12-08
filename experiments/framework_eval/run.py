@@ -15,20 +15,20 @@ from src.MetaOptimizer import MetaOptimizer
 # ============================================================
 DATASET_CONFIG = {
     "slice": {
-        "lambda_prune": [1.2],
-        "lambda_div":   [0.3],
+        "lambda_prune": [1.5],
+        "lambda_div":   [0.9],
         "prune_threshold": 0.01,
         "corr_threshold": 0.98,
     },
     "3droad": {
-         "lambda_prune": [1.0],
-        "lambda_div":   [0.5],
+         "lambda_prune": [1.5],
+        "lambda_div":   [0.9],
         "prune_threshold": 0.01,
         "corr_threshold": 0.92,
     },
     "kin40k": {
          "lambda_prune": [1.5],
-        "lambda_div":   [0.3],
+        "lambda_div":   [0.9],
         "prune_threshold": 0.01,
         "corr_threshold": 0.93,
     },
@@ -89,19 +89,55 @@ def run_linear_grid(
                 corr_thresh=corr_threshold
             )
 
-            final_metric, _ = model.evaluate()
+            final_pruned_trees=model.pruned_trees
+
+            tree_data = []
+            import pandas as pd
+            import numpy as np
+            for i, tree in enumerate(final_pruned_trees):
+
+                depth = tree.get_depth()
+                n_leaves = tree.get_n_leaves()
+
+
+
+
+                if hasattr(workflow, 'feature_names'):
+                   top_feature = workflow.feature_names[np.argmax(tree.feature_importances_)]
+                else:
+                   top_feature = f"Feat_{np.argmax(tree.feature_importances_)}"
+
+
+                tree_data.append({
+                       "Tree ID": f"Tree_{i}",
+                       "Depth": depth,
+                       "Leaves": n_leaves,
+                       "Primary Focus": top_feature
+                   })
+
+
+            df_trees = pd.DataFrame(tree_data)
+            print("\n" + "="*40)
+            print(" FINAL EXPLAINABLE ENSEMBLE (SURVIVORS)")
+            print("="*40)
+            # Print without the pandas index number for a cleaner look
+            print(df_trees.to_string(index=False, float_format="%.4f"))
+            print("="*40 + "\n")
+
+# Sort by Weight for better readability
+
+
+
+
+
+
+
+
 
             # ================================
             #   GET FINAL EXTRA METRICS
             # ================================
-            if data_type == "regression":
-                final_r2  = model.r2
-                final_f1  = None
-                final_auc = None
-            else:
-                final_r2  = None
-                final_f1  = model.f1
-                final_auc = model.auc
+
 
             pruned_based_weighted_size = (
                 len(model.kept_after_weight_pruning)
@@ -124,16 +160,12 @@ def run_linear_grid(
                 "full_auc": full_metrics["auc"],
 
                 # ==== PRE (SHAP) METRICS ====
-                "pre_pruned_metric": pre_metrics["main"],
+
                
-                "pre_f1":  pre_metrics["f1"],
-                "pre_auc": pre_metrics["auc"],
+
 
                 # ==== FINAL (LINEAR) METRICS ====
-                "final_pruned_metric": final_metric,
-                
-                "final_f1":  final_f1,
-                "final_auc": final_auc,
+
 
                 # ==== SIZES ====
                 "full_size": full_size,
@@ -171,14 +203,9 @@ def process_dataset(X, y, dataset_name, data_type):
     basic = PrePruner(data_type=data_type)
     basic.attach_to(workflow)
     basic.train()
-    pre_metric, _ = basic.evaluate()
 
-    pre_metrics = {
-        "main": pre_metric,
-       
-        "f1":   basic.f1 if data_type == "classification" else None,
-        "auc":  basic.auc if data_type == "classification" else None
-    }
+
+
 
     shap_size = len(basic.pruned_trees) if basic.pruned_trees else 0
 
@@ -189,7 +216,7 @@ def process_dataset(X, y, dataset_name, data_type):
         data_type=data_type,
         dataset_name=dataset_name,
         full_metrics=full_metrics,
-        pre_metrics=pre_metrics,
+        pre_metrics=None,
         shap_size=shap_size,
         full_size=full_size
     )
@@ -198,7 +225,7 @@ def process_dataset(X, y, dataset_name, data_type):
 def main():
 
     regression_sets = ["kin40k" ,"slice", "3droad"]
-    classification_sets = []
+    classification_sets = ["covertype"]
 
     for ds in regression_sets:
         data = Dataset(ds)

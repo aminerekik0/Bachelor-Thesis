@@ -88,6 +88,16 @@ def run_linear_grid(
                 corr_thresh=corr_threshold
             )
 
+            final_pruned_trees = model.pruned_trees
+
+            print(final_pruned_trees)
+
+
+
+
+
+
+
             final_metric, _ = model.evaluate()
 
             # ================================

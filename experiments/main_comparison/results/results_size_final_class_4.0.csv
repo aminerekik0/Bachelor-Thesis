@@ -1,0 +1,49 @@
+dataset,method,mean_size
+covtype,SHAP/Linear,14.8
+covtype,L1/Linear,30.6
+covtype,L1,46.2
+covtype,corr -> SHAP,48.2
+covtype,SHAP -> corr,49.8
+covtype,RE,14.8
+covtype,DREP,14.8
+covtype,RF,200.0
+higgs,SHAP/Linear,16.4
+higgs,L1/Linear,40.4
+higgs,L1,85.4
+higgs,corr -> SHAP,49.0
+higgs,SHAP -> corr,49.4
+higgs,RE,17.0
+higgs,DREP,17.0
+higgs,RF,200.0
+magic,SHAP/Linear,18.0
+magic,L1/Linear,35.0
+magic,L1,50.4
+magic,corr -> SHAP,48.2
+magic,SHAP -> corr,50.0
+magic,RE,18.0
+magic,DREP,18.0
+magic,RF,200.0
+adult,SHAP/Linear,24.2
+adult,L1/Linear,31.2
+adult,L1,66.8
+adult,corr -> SHAP,48.6
+adult,SHAP -> corr,50.0
+adult,RE,24.2
+adult,DREP,24.2
+adult,RF,200.0
+jm1,SHAP/Linear,24.6
+jm1,L1/Linear,37.6
+jm1,L1,25.0
+jm1,corr -> SHAP,49.0
+jm1,SHAP -> corr,50.0
+jm1,RE,24.6
+jm1,DREP,24.6
+jm1,RF,200.0
+weather,SHAP/Linear,25.4
+weather,L1/Linear,39.4
+weather,L1,48.4
+weather,corr -> SHAP,49.0
+weather,SHAP -> corr,50.0
+weather,RE,25.4
+weather,DREP,25.4
+weather,RF,200.0

@@ -108,7 +108,7 @@ class EnsembleCreator:
             print("Full Ensemble R2:", self.r2)
 
 
-            return self.mse, self.rmse, self.mae, self.r2,
+
 
         else:
             tree_preds = np.vstack([t.predict(self.X_test) for t in self.individual_trees])
@@ -128,5 +128,5 @@ class EnsembleCreator:
             print("Full Ensemble AUC:", self.auc)
 
 
-            return self.acc, self.f1
+        return self.mse, self.rmse, self.mae, self.r2 ,self.acc, self.f1
 
