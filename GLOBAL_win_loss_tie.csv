@@ -1,8 +1,0 @@
-method,win,loss,tie
-SHAP/Linear,7,13,10
-RF,3,24,3
-RE,15,6,9
-DREP,6,17,7
-L1/Linear,9,7,14
-L1,13,6,11
-COMP,20,0,10
