@@ -1,80 +1,54 @@
-# Explainability-Driven Tree Ensemble Pruning Using Meta-Level Optimization
+# Explainability-Driven Tree Ensemble Pruning Using Meta-Level Optimization (X-MOP)
 
 **Author:** Mohamed Amine Rekik 
-**Supervisor:** Dr. Amal Saadallah 
-**Institution:** TU Dortmund 
+
 
 ---
 
 ## 1. Abstract
-TODO 
+X-MOP is a Python framework for pruning tree ensembles by explicitly optimizing for explainability, sparsity, and diversity. Unlike traditional pruning strategies that focus solely on predictive accuracy, X-MOP leverages SHAP values and meta-level optimization to select trees that provide meaningful contributions, resulting in compact, interpretable, and diverse ensembles suitable for both regression and classification tasks.
 
-## 2. Datasets 
 
-see https://github.com/treforevans/uci_datasets/tree/master 
 
-Regression datasets from the [UCI machine learning repository](https://archive.ics.uci.edu) prepared for benchmarking studies with test-train splits.
+## 2. Installation
 
-# Installation
-
-Install using pip :
+Clone the repository and install dependencies:
 
 ```bash
-python -m pip install git+https://github.com/treforevans/uci_datasets.git
+git clone https://github.com/aminerekik0/Bachelor-Thesis.git
+cd X-MOP
+pip install -r requirements.txt
 ```
 
-you can choose one of the following datasets : juste update the dataset_name in the code  
 
-| Dataset name     | Number of observations | Input dimension |
-| :--------------- | ---------------------: | --------------: |
-| `3droad`         |                 434874 |               3 |
-| `autompg`        |                    392 |               7 |
-| `bike`           |                  17379 |              17 |
-| `challenger`     |                     23 |               4 |
-| `concreteslump`  |                    103 |               7 |
-| `energy`         |                    768 |               8 |
-| `forest`         |                    517 |              12 |
-| `houseelectric`  |                2049280 |              11 |
-| `keggdirected`   |                  48827 |              20 |
-| `kin40k`         |                  40000 |               8 |
-| `parkinsons`     |                   5875 |              20 |
-| `pol`            |                  15000 |              26 |
-| `pumadyn32nm`    |                   8192 |              32 |
-| `slice`          |                  53500 |             385 |
-| `solar`          |                   1066 |              10 |
-| `stock`          |                    536 |              11 |
-| `yacht`          |                    308 |               6 |
-| `airfoil`        |                   1503 |               5 |
-| `autos`          |                    159 |              25 |
-| `breastcancer`   |                    194 |              33 |
-| `buzz`           |                 583250 |              77 |
-| `concrete`       |                   1030 |               8 |
-| `elevators`      |                  16599 |              18 |
-| `fertility`      |                    100 |               9 |
-| `gas`            |                   2565 |             128 |
-| `housing`        |                    506 |              13 |
-| `keggundirected` |                  63608 |              27 |
-| `machine`        |                    209 |               7 |
-| `pendulum`       |                    630 |               9 |
-| `protein`        |                  45730 |               9 |
-| `servo`          |                    167 |               4 |
-| `skillcraft`     |                   3338 |              19 |
-| `sml`            |                   4137 |              26 |
-| `song`           |                 515345 |              90 |
-| `tamielectric`   |                  45781 |               3 |
-| `wine`           |                   1599 |              11 |
+## 3. Simple Example Usage with X-MOP
 
+```python
+import numpy as np
+from sklearn.datasets import load_iris
+from src.EnsembleCreator import EnsembleCreator
+from src.PrePruner import PrePruner
+from src.MetaOptimizer import MetaOptimizer
 
-## 3. usage : 
+# Load Iris dataset
+data = load_iris()
+X = data.data
+y = data.target
 
-Install the required packages :
+# 1. Create Base Trees
+ensemble = EnsembleCreator(X, y, n_trees=200, data_type="classification")
+ensemble.train_base_trees()
 
-```bash
-python pip install -r requirements.txt 
+# 2. Pre-Pruning using SHAP (keep top 70%)
+prepruner = PrePruner(keep_ratio=0.3, data_type="classification")
+prepruner.attach_to(ensemble)
+prepruner.train()
+pruned_trees = prepruner.pruned_trees
+
+# 3. Meta-Optimization for pruning & diversity
+meta_opt = MetaOptimizer(λ_prune=1.0, λ_div=0.5, data_type="classification")
+meta_opt.attach_to(ensemble)
+meta_opt.train(pruned_trees)
+meta_opt.prune()
+
 ```
-and install the datasets  : 
-
-```bash
-python -m pip install git+https://github.com/treforevans/uci_datasets.git
-```
-then run the script  
