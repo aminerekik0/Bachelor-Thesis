@@ -13,7 +13,6 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-# adjust import paths if needed
 import sys
 
 
@@ -61,7 +60,7 @@ DATASET_CONFIG = {
         "corr_threshold": 0.93,
         "task": "classification",
     },
-    # you can add "higgs" here later if you want to include it
+    
 }
 
 
@@ -220,7 +219,7 @@ def shap_prune_on_subset(trees_subset, workflow, data_type, keep_ratio=0.3, rand
     shap_result = explainer(X_meta_eval)
     shap_values = np.array(shap_result.values)
 
-    # importance like in BasicMetaModel
+   
     tree_importance = np.mean(np.abs(shap_values), axis=0)
     k = max(5, int(len(trees_subset) * keep_ratio))
     top_indices = np.argsort(tree_importance)[-k:][::-1]
@@ -265,7 +264,6 @@ def run_methods_for_dataset(X, y, dataset_name):
 
     # ========================================================
     #           COMMON STAGE 1: SHAP-BASED BASIC META
-    #    (used by Method A and Method B)
     # ========================================================
     basic = PrePruner(data_type=task)
     basic.attach_to(workflow)
@@ -338,7 +336,7 @@ def run_methods_for_dataset(X, y, dataset_name):
     append_to_csv(row_A)
 
     # ========================================================
-    # METHOD B: SHAP -> Correlation (NO LinearMetaModel)
+    # METHOD B: SHAP -> Correlation 
     # ========================================================
     print("\n----- METHOD B: SHAP -> Correlation (no optimization) -----")
 
@@ -384,8 +382,7 @@ def run_methods_for_dataset(X, y, dataset_name):
     # ========================================================
     print("\n----- METHOD C: Correlation -> SHAP -----")
 
-    # Step 1: correlation pruning on ALL trees (200)
-    # here we don't have importance yet, so we use equal priority (original order)
+    
     corr_pruned_trees_C_stage1 = correlation_prune(
         workflow.individual_trees,
         workflow,
