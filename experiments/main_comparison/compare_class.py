@@ -112,7 +112,7 @@ LAMBDA_CONFIG ={
 
 }
 
-# Correlation threshold config (example values, adjust if needed)
+
 CORR_THRESHOLD_CONFIG = {
     "magic": 0.95,
     "adult": 0.95,
