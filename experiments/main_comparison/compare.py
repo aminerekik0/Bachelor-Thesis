@@ -280,13 +280,13 @@ def run_all_methods_once(ensemble, dataset_name):
         rf_metric = accuracy_score(ensemble.y_test, rf_preds)
 
     # =========================================================
-    # PRINT DETAILED TREE PARAMS TABLE (Method A vs RE)
+    # PRINT TREE PARAMS TABLE (Method A vs RE)
     # =========================================================
     print(f"\n\n{'='*80}")
     print(f" DETAILED TREE ANALYSIS: {dataset_name}")
     print(f"{'='*80}")
 
-    # Only inspecting Method A (Mine) and RE as requested
+   
     methods_to_inspect = {
         "Method A (SHAP/Linear)": shap_indices,
         "RE (Baseline)": re_indices
@@ -301,18 +301,17 @@ def run_all_methods_once(ensemble, dataset_name):
         print(f"{'TreeID':<8} | {'Depth':<6} | {'MaxFeat':<8} | {'RndState':<10} | {'TopFeature':<10}")
         print("-" * 60)
 
-        # Sort indices to make the table readable
+       
         for idx in sorted(list(set(indices))):
             tree = ensemble.individual_trees[idx]
 
-            # Get params
+           
             d = tree.max_depth
             mf = tree.max_features
             rs = tree.random_state
 
-            # Get most focused feature (Highest Importance)
+           
             if hasattr(tree, 'feature_importances_'):
-                # Using numpy to find the index of the max feature importance
                 top_feat_idx = np.argmax(tree.feature_importances_)
             else:
                 top_feat_idx = "N/A"
@@ -321,7 +320,6 @@ def run_all_methods_once(ensemble, dataset_name):
         print("-" * 60)
     print("\n")
 
-    # --- Compile Results ---
     results = {
         "SHAP/Linear": evaluate_with_meta_weights(ensemble, shap_indices),
         "MethodB_SHAP_then_Corr" : evaluate_with_meta_weights(ensemble ,method_B_idx) ,
