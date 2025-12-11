@@ -101,8 +101,6 @@ def run_linear_grid(
             final_metric, _ = model.evaluate()
 
             # ================================
-            #   GET FINAL EXTRA METRICS
-            # ================================
             if data_type == "regression":
                 final_r2  = model.r2
                 final_f1  = None
@@ -118,9 +116,7 @@ def run_linear_grid(
             )
             linear_size = len(model.pruned_trees) if model.pruned_trees else 0
 
-            # =========================================
-            #       ADD LOSS VALUES TO THE CSV
-            # =========================================
+      
             row = {
                 "dataset": dataset_name,
                 "task": data_type,
