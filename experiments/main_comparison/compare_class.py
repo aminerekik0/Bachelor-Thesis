@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore")
 
 
 # ===============================================================
-# EMBEDDED: GreedyPruningClassifier & Metrics
+#  GreedyPruningClassifier & Metrics
 # ===============================================================
 
 def reduced_error(i, ensemble_proba, selected_models, target):
