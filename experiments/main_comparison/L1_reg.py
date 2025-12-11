@@ -15,7 +15,7 @@ class L1PruningClassifier:
         if self.task not in ["regression", "classification"]:
             raise ValueError(f"Unsupported task: {task}. Use 'regression' or 'classification'.")
 
-        # Configure loss
+
         loss = "mse" if self.task == "regression" else "cross-entropy"
 
         self.model = ProxPruningClassifier(
@@ -24,7 +24,7 @@ class L1PruningClassifier:
             l_ensemble_reg=l_reg,
             step_size=step_size,
             epochs=epochs,
-            regularizer=None,      # No tree-level regularization
+            regularizer=None,      
             normalize_weights=True
         )
 
@@ -43,20 +43,16 @@ class L1PruningClassifier:
         proba = np.array(predictions_list)
 
         if self.task == "regression":
-            # Regression: shape (n_models, n_samples)
             if proba.ndim == 2:
-                proba = proba[:, :, np.newaxis]  # Add dummy class dim if needed
+                proba = proba[:, :, np.newaxis] 
         else:
-            # Classification: ensure shape (n_models, n_samples, n_classes)
             if proba.ndim == 2:
-                # If predictions are class indices, convert to one-hot
                 n_classes = int(np.max(proba) + 1)
                 one_hot = np.zeros((proba.shape[0], proba.shape[1], n_classes))
                 for i in range(proba.shape[0]):
                     one_hot[i, np.arange(proba.shape[1]), proba[i]] = 1
                 proba = one_hot
 
-        # Run the PyPruning optimization
         selected_indices, weights = self.model.prune_(proba, y_true)
 
         selected_indices = list(selected_indices)
