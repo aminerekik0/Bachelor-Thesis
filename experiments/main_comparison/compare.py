@@ -255,8 +255,7 @@ def run_all_methods_once(ensemble, dataset_name):
     if ensemble.data_type == "regression":
         # RE (Reduced Error)
         re_method = REPruningRegressor(n_estimators=target_size)
-        _, re_sel_local = re_method.select(np.array(orginal_preds), y_meta) # ensure numpy array
-
+        _, re_sel_local = re_method.select(np.array(orginal_preds), y_meta) 
         if re_sel_local:
             re_indices = list(re_sel_local)
 
