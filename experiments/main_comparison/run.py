@@ -156,7 +156,7 @@ def correlation_prune(trees_list, workflow, data_type, corr_thresh = 0.95, impor
     if importance is None:
         order = indices
     else:
-        order = np.argsort(importance)[::-1]  # descending
+        order = np.argsort(importance)[::-1]  
 
     keep = []
     for idx in order:
@@ -366,7 +366,7 @@ def run_methods_for_dataset(X, y, dataset_name):
         "full_r2": full_r2,
         "full_f1": full_f1,
         "full_auc": full_auc,
-        "stage1_size": shap_size,           # SHAP-pruned size
+        "stage1_size": shap_size,           
         "stage1_metric": pre_metric,
         "stage1_r2": pre_r2,
         "stage1_f1": pre_f1,
@@ -419,8 +419,8 @@ def run_methods_for_dataset(X, y, dataset_name):
         "full_r2": full_r2,
         "full_f1": full_f1,
         "full_auc": full_auc,
-        "stage1_size": corr_stage1_size,    # size after corr-only
-        "stage1_metric": None,              # you can fill this if you want to eval after corr-only
+        "stage1_size": corr_stage1_size,    
+        "stage1_metric": None,              
         "stage1_r2": None,
         "stage1_f1": None,
         "stage1_auc": None,
