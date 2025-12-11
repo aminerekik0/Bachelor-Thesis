@@ -120,11 +120,9 @@ def run_linear_grid(
             print("\n" + "="*40)
             print(" FINAL EXPLAINABLE ENSEMBLE (SURVIVORS)")
             print("="*40)
-            # Print without the pandas index number for a cleaner look
             print(df_trees.to_string(index=False, float_format="%.4f"))
             print("="*40 + "\n")
 
-# Sort by Weight for better readability
 
 
 
@@ -134,10 +132,7 @@ def run_linear_grid(
 
 
 
-            # ================================
-            #   GET FINAL EXTRA METRICS
-            # ================================
-
+           
 
             pruned_based_weighted_size = (
                 len(model.kept_after_weight_pruning)
@@ -159,13 +154,7 @@ def run_linear_grid(
                 "full_f1":  full_metrics["f1"],
                 "full_auc": full_metrics["auc"],
 
-                # ==== PRE (SHAP) METRICS ====
-
-               
-
-
-                # ==== FINAL (LINEAR) METRICS ====
-
+                
 
                 # ==== SIZES ====
                 "full_size": full_size,
