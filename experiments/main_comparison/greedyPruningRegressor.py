@@ -3,11 +3,10 @@ import numpy as np
 class GreedyPruningRegressor:
     """
     A simple, standalone greedy pruner for regression.
-    No sklearn dependencies.
     """
     def __init__(self, n_estimators=10, method="RE"):
         self.n_estimators = n_estimators
-        self.method = method  # "RE" or "IC"
+        self.method = method 
         self.selected_indices_ = []
 
     def select(self, preds, target):
@@ -25,7 +24,7 @@ class GreedyPruningRegressor:
         not_selected = list(range(n_available))
         selected = []
 
-        # --- GREEDY LOOP ---
+        
         for _ in range(self.n_estimators):
             best_score = float('inf')
             best_tree_idx = -1
@@ -81,7 +80,6 @@ class GreedyPruningRegressor:
         return float('inf')
 
 
-# --- Wrapper Classes for your run.py compatibility ---
 
 class REPruningRegressor(GreedyPruningRegressor):
     def __init__(self, n_estimators=10):
