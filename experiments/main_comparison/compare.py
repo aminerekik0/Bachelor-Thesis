@@ -362,7 +362,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
     scores = {m: [] for m in method_list}
     size_lists = {m: [] for m in method_list}
 
-    for run in range(1):
+    for run in range(10):
         print(f"\n>> Run {run+1}/10")
         ensemble = EnsembleCreator(X=X, y=y, data_type="regression")
         ensemble.train_base_trees()
@@ -381,10 +381,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 def main():
     regression_sets = [
 
-        "kin40k",
-
-        "slice",
-        "3droad"
+        "KeggDirected", "KeggUndirected", "Kin40k", "Solar", "Protein", "Tamielectric", "Pol", "Slice", "3droad"
     ]
 
     dataset_summary_rows = []
