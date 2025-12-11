@@ -13,11 +13,10 @@ import pandas as pd
 import warnings
 import math
 
-# Suppress warnings
 warnings.filterwarnings("ignore")
 
 # ===============================================================
-# FIXED λ_prune, λ_div PER DATASET
+#  λ_prune, λ_div PER DATASET
 # ===============================================================
 LAMBDA_CONFIG = {
     "slice": (1.2, 0.3),
@@ -46,7 +45,7 @@ CORR_THRESH_CONFIG = {
 }
 
 # ===============================================================
-# HELPER 1: Auto-Tune L1/Linear (Your PyTorch Model)
+# HELPER 1: Auto-Tune L1/Linear
 # ===============================================================
 def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, tolerance=5):
     lambdas_to_try = [0.01, 0.025, 0.05, 0.1, 0.2, 0.5]
@@ -170,7 +169,7 @@ def compute_dataset_wlt(dataset_summary):
     return WLT
 
 # ===============================================================
-# Run ALL methods (one run)
+# Run ALL methods
 # ===============================================================
 def run_all_methods_once(ensemble, dataset_name):
 
@@ -355,8 +354,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
     print(f" DATASET: {dataset_name}")
     print(f"==================================================")
 
-    # Updated list of methods
-    # UPDATE THIS LINE
+    
     method_list = ["SHAP/Linear", "L1/Linear", "L1", "RE", "Individual Contribution", "RF", "MethodB_SHAP_then_Corr", "MethodC_Corr_then_SHAP"]
 
     scores = {m: [] for m in method_list}
@@ -414,10 +412,10 @@ def main():
         except Exception as e:
             print(f"Skipping {ds} due to error: {e}")
 
-    # Calculate WLT
+    
     global_wlt = compute_dataset_wlt(dataset_summary_rows)
 
-    # Save
+    
     pd.DataFrame(dataset_summary_rows).to_csv("results/results_rmse_final_all.csv", index=False)
     pd.DataFrame(dataset_size_rows).to_csv("results/results_sizes_final_all.csv", index=False)
 
