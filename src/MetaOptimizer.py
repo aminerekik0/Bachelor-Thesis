@@ -34,7 +34,6 @@ class MetaOptimizer(BaseMetaModel):
         self.total_loss = None
         self.pruned_exp = False
 
-        # Tracking losses
         self.initial_main_loss = None
         self.initial_prune_loss = None
         self.initial_div_loss = None
@@ -63,8 +62,7 @@ class MetaOptimizer(BaseMetaModel):
         # 1. L1 (Lasso) Mode
         # ============================
         if mode == "L1":
-            # Simple L1 Norm: Sum of absolute values of weights
-            # This pushes weights towards zero.
+          
             if model_weights is None:
                 return torch.tensor(0.0)
             return torch.norm(model_weights, p=1)
