@@ -3,8 +3,6 @@
 **Author:** Mohamed Amine Rekik 
 
 
----
-
 ## 1. Abstract
 X-MOP is a Python framework for pruning tree ensembles by explicitly optimizing for explainability, sparsity, and diversity. Unlike traditional pruning strategies that focus solely on predictive accuracy, X-MOP leverages SHAP values and meta-level optimization to select trees that provide meaningful contributions, resulting in compact, interpretable, and diverse ensembles suitable for both regression and classification tasks.
 
