@@ -16,7 +16,6 @@ Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/aminerekik0/Bachelor-Thesis.git
-cd X-MOP
 pip install -r requirements.txt
 ```
 
