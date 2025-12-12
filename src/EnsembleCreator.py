@@ -10,7 +10,8 @@ class EnsembleCreator:
     """
     Explainability-Driven Tree Ensemble.
     """
-    def __init__(self, X=None, y=None,n_trees=200, max_depth="AUTO" , test_size=0.2, random_state=42, data_type="regression" ,r_bootstrap=0.7):
+    def __init__(self, X=None, y=None,n_trees=200, max_depth="AUTO" , test_size=0.2,
+                 random_state=42, data_type="regression" ,r_bootstrap=0.7):
 
         self.X = X
         self.y = y

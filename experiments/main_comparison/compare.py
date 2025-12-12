@@ -15,9 +15,7 @@ import math
 
 warnings.filterwarnings("ignore")
 
-# ===============================================================
-#  λ_prune, λ_div PER DATASET
-# ===============================================================
+
 LAMBDA_CONFIG = {
     "slice": (1.2, 0.3),
     "3droad": (1.2, 0.3),
@@ -44,9 +42,7 @@ CORR_THRESH_CONFIG = {
     "keggdirected": 0.997,
 }
 
-# ===============================================================
-# HELPER 1: Auto-Tune L1/Linear
-# ===============================================================
+
 def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, tolerance=5):
     lambdas_to_try = [0.01, 0.025, 0.05, 0.1, 0.2, 0.5]
     best_lambda = 0.01
@@ -70,9 +66,7 @@ def find_best_lambda_for_target_size(ensemble, basic_pruned_trees, target_size, 
                 break
     return best_lambda
 
-# ===============================================================
-# HELPER 2: Auto-Tune External L1 (The "Second L1")
-# ===============================================================
+
 def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, tolerance=5):
     alphas_to_try = [0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 0.58, 0.65, 0.68, 0.8]
     best_alpha = 0.005
@@ -103,9 +97,7 @@ def find_best_alpha_for_external_l1(ensemble, base_preds, y_meta, target_size, t
 
     return best_alpha
 
-# ===============================================================
-# Evaluate selected trees WITH META-WEIGHTS
-# ===============================================================
+
 def evaluate_with_meta_weights(ensemble, selected_indices):
     if len(selected_indices) == 0:
         return np.nan
@@ -130,9 +122,7 @@ def evaluate_with_meta_weights(ensemble, selected_indices):
     rmse = np.sqrt(mean_squared_error(y_test, final_pred))
     return rmse
 
-# ===============================================================
-# GLOBAL Win/Loss/Tie Computation (Standard Error)
-# ===============================================================
+
 def compute_dataset_wlt(dataset_summary):
     methods = list(set([row["method"] for row in dataset_summary]))
     WLT = {m: {"win": 0, "loss": 0, "tie": 0} for m in methods}
@@ -168,24 +158,23 @@ def compute_dataset_wlt(dataset_summary):
                     WLT[mB]["tie"] += 1
     return WLT
 
-# ===============================================================
-# Run ALL methods
-# ===============================================================
+
 def run_all_methods_once(ensemble, dataset_name):
 
-    # 1. Setup
+
+
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.0, 0.3))
     corr_thresh_val = CORR_THRESH_CONFIG.get(dataset_name, 0.95)
     basic = PrePruner()
     basic.attach_to(ensemble)
     basic.train()
 
-    # Pre-calculate meta features for external baselines
+
     X_meta, y_meta = ensemble.X_train_meta, ensemble.y_train_meta
     base_preds = [t.predict(X_meta) for t in basic.pruned_trees]
     orginal_preds = [t.predict(X_meta) for t in ensemble.individual_trees]
 
-    # --- METHOD 1: SHAP/Linear  ---
+
     print(f"\n--- [SHAP] Training Proposed Method (λ={λ_shap}) ---")
     print(f" {λ_div}=λ_div λ_prune={λ_shap}")
     linear_meta = MetaOptimizer(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=200)
@@ -196,7 +185,7 @@ def run_all_methods_once(ensemble, dataset_name):
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     target_size = len(shap_indices)
 
-    # --- METHOD 2: L1/Linear  ---
+
     print(f"\n--- [L1/Linear] Tuning to match size ({target_size} trees) ---")
     tuned_l1 = find_best_lambda_for_target_size(ensemble, basic.pruned_trees, target_size)
 
@@ -223,7 +212,7 @@ def run_all_methods_once(ensemble, dataset_name):
         importance=None,
     )
 
-    # Step 2: SHAP pruning on this corr-pruned subset
+
     shap_pruned_trees_C, _ = shap_prune_on_subset(
         corr_pruned_trees_C_stage1,
         ensemble,
@@ -232,7 +221,7 @@ def run_all_methods_once(ensemble, dataset_name):
     )
     method_C_idx = [ensemble.individual_trees.index(t) for t in shap_pruned_trees_C]
 
-    # --- METHOD 3: L1 (External Class Baseline) ---
+
     print(f"\n--- [L1 External] Tuning to match size ({target_size} trees) ---")
     best_alpha_ext = find_best_alpha_for_external_l1(ensemble, orginal_preds, y_meta, target_size)
 
@@ -248,25 +237,25 @@ def run_all_methods_once(ensemble, dataset_name):
         print(f"[WARN] External L1 failed: {e}")
         l1_ext_indices = []
 
-    # --- METHOD 4 & 5: RE and Individual Contribution (Greedy) ---
+
     re_indices = []
     ic_indices = []
 
     if ensemble.data_type == "regression":
-        # RE (Reduced Error)
+
         re_method = REPruningRegressor(n_estimators=target_size)
-        _, re_sel_local = re_method.select(np.array(orginal_preds), y_meta) 
+        _, re_sel_local = re_method.select(np.array(orginal_preds), y_meta)
         if re_sel_local:
             re_indices = list(re_sel_local)
 
-        # Individual Contribution (IC)
+
         ic_method = ICPruningRegressor(n_estimators=target_size)
         _, ic_sel_local = ic_method.select(np.array(orginal_preds), y_meta)
 
         if ic_sel_local:
             ic_indices = list(ic_sel_local)
 
-    # --- METHOD 6: RF (Random Forest Baseline) ---
+
     if ensemble.data_type == "regression":
         rf = RandomForestRegressor(n_estimators=200, random_state=42, max_depth=8)
         rf.fit(ensemble.X_train, ensemble.y_train)
@@ -278,14 +267,12 @@ def run_all_methods_once(ensemble, dataset_name):
         rf_preds = rf.predict(ensemble.X_test)
         rf_metric = accuracy_score(ensemble.y_test, rf_preds)
 
-    # =========================================================
-    # PRINT TREE PARAMS TABLE (Method A vs RE)
-    # =========================================================
+
     print(f"\n\n{'='*80}")
     print(f" DETAILED TREE ANALYSIS: {dataset_name}")
     print(f"{'='*80}")
 
-   
+
     methods_to_inspect = {
         "Method A (SHAP/Linear)": shap_indices,
         "RE (Baseline)": re_indices
@@ -300,17 +287,18 @@ def run_all_methods_once(ensemble, dataset_name):
         print(f"{'TreeID':<8} | {'Depth':<6} | {'MaxFeat':<8} | {'RndState':<10} | {'TopFeature':<10}")
         print("-" * 60)
 
-       
+
         for idx in sorted(list(set(indices))):
             tree = ensemble.individual_trees[idx]
 
-           
+
             d = tree.max_depth
             mf = tree.max_features
             rs = tree.random_state
 
-           
+
             if hasattr(tree, 'feature_importances_'):
+
                 top_feat_idx = np.argmax(tree.feature_importances_)
             else:
                 top_feat_idx = "N/A"
@@ -318,6 +306,7 @@ def run_all_methods_once(ensemble, dataset_name):
             print(f"{idx:<8} | {d:<6} | {str(mf):<8} | {rs:<10} | {top_feat_idx:<10}")
         print("-" * 60)
     print("\n")
+
 
     results = {
         "SHAP/Linear": evaluate_with_meta_weights(ensemble, shap_indices),
@@ -343,15 +332,13 @@ def run_all_methods_once(ensemble, dataset_name):
 
     return results, sizes
 
-# ===============================================================
-# Loop Helper
-# ===============================================================
+
 def run_methods_for_dataset_10_times(X, y, dataset_name):
     print(f"\n==================================================")
     print(f" DATASET: {dataset_name}")
     print(f"==================================================")
 
-    
+
     method_list = ["SHAP/Linear", "L1/Linear", "L1", "RE", "Individual Contribution", "RF", "MethodB_SHAP_then_Corr", "MethodC_Corr_then_SHAP"]
 
     scores = {m: [] for m in method_list}
@@ -370,9 +357,7 @@ def run_methods_for_dataset_10_times(X, y, dataset_name):
 
     return scores, size_lists
 
-# ===============================================================
-# MAIN
-# ===============================================================
+
 def main():
     regression_sets = [
 
@@ -409,10 +394,10 @@ def main():
         except Exception as e:
             print(f"Skipping {ds} due to error: {e}")
 
-    
+
     global_wlt = compute_dataset_wlt(dataset_summary_rows)
 
-    
+
     pd.DataFrame(dataset_summary_rows).to_csv("results/results_rmse_final_all.csv", index=False)
     pd.DataFrame(dataset_size_rows).to_csv("results/results_sizes_final_all.csv", index=False)
 
@@ -423,9 +408,6 @@ def main():
     df_wlt = pd.DataFrame(rows)
     df_wlt.to_csv("GLOBAL_win_loss_tie.csv", index=False)
 
-    print("\n======================================")
-    print(" GLOBAL WIN / LOSS / TIE SUMMARY")
-    print("======================================")
     print(pd.DataFrame(rows))
 
 if __name__ == "__main__":

@@ -23,9 +23,6 @@ warnings.filterwarnings("ignore")
 
 
 
-# ===============================================================
-#  GreedyPruningClassifier & Metrics
-# ===============================================================
 
 def reduced_error(i, ensemble_proba, selected_models, target):
     iproba = ensemble_proba[i,:,:]
@@ -97,9 +94,7 @@ class GreedyPruningClassifier(BaseEstimator, ClassifierMixin):
         self.selected_indices_ = selected
         return selected
 
-# ===============================================================
-# CONFIG & HELPERS
-# ===============================================================
+
 LAMBDA_CONFIG ={
     "magic": (1.2, 0.3),
     "adult": (1.2, 0.3),
@@ -202,9 +197,6 @@ def compute_dataset_wlt(dataset_summary):
                     WLT[mA]["tie"] += 1; WLT[mB]["tie"] += 1
     return WLT
 
-# ===============================================================
-# MAIN RUNNER
-# ===============================================================
 def run_all_methods_once(ensemble, dataset_name):
     λ_shap, λ_div = LAMBDA_CONFIG.get(dataset_name, (1.2, 0.3))
     corr_thresh = CORR_THRESHOLD_CONFIG.get(dataset_name , 0.95)
@@ -221,7 +213,7 @@ def run_all_methods_once(ensemble, dataset_name):
         original_preds_proba = np.zeros((len(ensemble.individual_trees), len(y_meta), 2))
     base_preds_flat = np.column_stack([t.predict(X_meta) for t in basic.pruned_trees])
 
-    # 1. SHAP
+
     print(f"\n--- [SHAP] Training (λ={λ_shap}) ---")
     linear_meta = MetaOptimizer(mode="SHAP", λ_div=λ_div, λ_prune=λ_shap, epochs=200)
     linear_meta.attach_to(ensemble)
@@ -230,7 +222,7 @@ def run_all_methods_once(ensemble, dataset_name):
     shap_indices = [ensemble.individual_trees.index(t) for t in linear_meta.pruned_trees]
     target_size = len(shap_indices) if len(shap_indices) > 2 else 5
 
-    # 2. L1/Linear
+
     print(f"--- [L1/Linear] Tuning to size {target_size} ---")
     tuned_l1 = find_best_lambda_for_target_size(ensemble, basic.pruned_trees, target_size)
     linear_meta_l1 = MetaOptimizer(mode="L1", λ_div=0.0, λ_prune=tuned_l1, epochs=200)
@@ -239,7 +231,7 @@ def run_all_methods_once(ensemble, dataset_name):
     linear_meta_l1.prune(prune_threshold=0.01 ,  corr_thresh= corr_thresh)
     l1_indices = [ensemble.individual_trees.index(t) for t in linear_meta_l1.pruned_trees]
 
-    # 3. L1 External
+
     print(f"--- [L1 External] Tuning to size {target_size} ---")
     best_alpha = find_best_alpha_for_external_l1(ensemble, original_preds_proba, y_meta, target_size)
     try:
@@ -255,7 +247,7 @@ def run_all_methods_once(ensemble, dataset_name):
         print(f"[WARN] External L1 failed: {e}")
         l1_ext_idx = []
 
-    # 4. Greedy Methods
+
     re_m = GreedyPruningClassifier(n_estimators=target_size, metric=reduced_error)
     re_sel = re_m.prune_(original_preds_proba, y_meta)
     re_idx = list(re_sel)
@@ -268,7 +260,7 @@ def run_all_methods_once(ensemble, dataset_name):
     drep_sel = drep_m.prune_(original_preds_proba, y_meta)
     drep_idx = list(drep_sel)
 
-    # 5. RF Baseline
+
     rf = RandomForestClassifier(n_estimators=200, max_depth=8)
     rf.fit(ensemble.X_train, ensemble.y_train)
     rf_acc = accuracy_score(ensemble.y_test, rf.predict(ensemble.X_test))
@@ -310,7 +302,7 @@ def run_all_methods_once(ensemble, dataset_name):
     corr_stage1_size = len(corr_pruned_trees_C_stage1)
 
 
-    # Step 2: SHAP pruning on this corr-pruned subset
+
 
     shap_pruned_trees_C, _ = shap_prune_on_subset(
 
@@ -381,9 +373,9 @@ def main():
                 X = df.iloc[:, 1:].astype("float32").values
             else:
                 print(f"\n=== DATASET: {ds} ===")
-                X, y = get_dataset(ds)  # Get X, y unsplit
+                X, y = get_dataset(ds)
 
-            # Run ensemble methods
+
             scores, size_lists = run_methods_for_dataset_10_times(X, y, ds)
             for m, vals in scores.items():
                 summary_rows.append({"dataset": ds, "method": m, "mean_acc": np.nanmean(vals), "std_acc": np.nanstd(vals)})

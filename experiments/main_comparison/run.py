@@ -13,7 +13,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-import sys
+
 
 
 from src.EnsembleCreator import EnsembleCreator
@@ -21,9 +21,6 @@ from src.PrePruner import PrePruner
 from src.MetaOptimizer import MetaOptimizer
 
 
-# ============================================================
-# DATASET-SPECIFIC CONFIG FOR METHOD A (full framework)
-# ============================================================
 DATASET_CONFIG = {
     "slice": {
         "lambda_prune": 0.6,
@@ -67,9 +64,7 @@ DATASET_CONFIG = {
 OUT_CSV = "comparison_results.csv"
 
 
-# ============================================================
-#               HELPER FUNCTIONS
-# ============================================================
+
 
 def append_to_csv(row, filename=OUT_CSV):
     write_header = not os.path.exists(filename)
@@ -95,9 +90,9 @@ def evaluate_subset(trees, workflow, data_type):
     X_test = workflow.X_test
     y_test = workflow.y_test
 
-    # =============== REGRESSION ===============
+
     if data_type == "regression":
-        # train meta linear model on X_train_meta
+
         X_train_final = get_meta_features(workflow.X_train_meta, trees)
         y_train_final = workflow.y_train_meta
 
@@ -113,9 +108,8 @@ def evaluate_subset(trees, workflow, data_type):
         r2 = r2_score(y_test, final_preds)
         return {"main": rmse, "r2": r2, "f1": None, "auc": None}
 
-    # =============== CLASSIFICATION ===============
     else:
-        # majority vote of tree predictions
+
         tree_labels = np.vstack([t.predict(X_test) for t in trees])
         from scipy.stats import mode
         mode_res = mode(tree_labels, axis=0, keepdims=False)
@@ -162,7 +156,7 @@ def correlation_prune(trees_list, workflow, data_type, corr_thresh = 0.95, impor
         if not keep:
             keep.append(idx)
             continue
-        # check correlation with already kept trees
+
         too_corr = False
         for k in keep:
             if np.abs(corr_matrix[idx, k]) > corr_thresh:
@@ -188,11 +182,11 @@ def shap_prune_on_subset(trees_subset, workflow, data_type, keep_ratio=0.3, rand
     y_train_meta = workflow.y_train_meta
     y_eval_meta = workflow.y_eval_meta
 
-    # Build meta-features for this subset
+
     X_meta_train = get_meta_features(X_train_meta, trees_subset)
     X_meta_eval = get_meta_features(X_eval_meta, trees_subset)
 
-    # === train meta model ===
+
     if data_type == "regression":
         meta_model = LinearRegression()
         meta_model.fit(X_meta_train, y_train_meta)
@@ -214,7 +208,7 @@ def shap_prune_on_subset(trees_subset, workflow, data_type, keep_ratio=0.3, rand
         auc = roc_auc_score(y_eval_meta, y_pred)
         meta_metrics = {"main": acc, "r2": None, "f1": f1, "auc": auc}
 
-    # === SHAP on subset ===
+
     explainer = shap.Explainer(meta_model, X_meta_eval, algorithm="linear")
     shap_result = explainer(X_meta_eval)
     shap_values = np.array(shap_result.values)
@@ -228,9 +222,7 @@ def shap_prune_on_subset(trees_subset, workflow, data_type, keep_ratio=0.3, rand
     return pruned_trees, meta_metrics
 
 
-# ============================================================
-#           METHODS A, B, C PER DATASET
-# ============================================================
+
 
 def run_methods_for_dataset(X, y, dataset_name):
     cfg = DATASET_CONFIG[dataset_name]
@@ -249,7 +241,7 @@ def run_methods_for_dataset(X, y, dataset_name):
     workflow.train_base_trees()
     full_size = len(workflow.individual_trees)
 
-    # Full ensemble metrics
+
     mse, rmse, mae, r2, acc, f1 = workflow._evaluate()
     if task == "regression":
         full_metric = rmse
@@ -262,9 +254,6 @@ def run_methods_for_dataset(X, y, dataset_name):
         full_f1 = f1
         full_auc = workflow.auc
 
-    # ========================================================
-    #           COMMON STAGE 1: SHAP-BASED BASIC META
-    # ========================================================
     basic = PrePruner(data_type=task)
     basic.attach_to(workflow)
     basic.train()
@@ -281,9 +270,7 @@ def run_methods_for_dataset(X, y, dataset_name):
         pre_f1 = basic.f1
         pre_auc = basic.auc
 
-    # ========================================================
-    # METHOD A: Full Framework
-    # ========================================================
+
     print("\n----- METHOD A: Full framework (Stage1 SHAP + Stage2 Linear + corr) -----")
 
     lm = MetaOptimizer(
@@ -335,12 +322,10 @@ def run_methods_for_dataset(X, y, dataset_name):
     }
     append_to_csv(row_A)
 
-    # ========================================================
-    # METHOD B: SHAP -> Correlation 
-    # ========================================================
+
     print("\n----- METHOD B: SHAP -> Correlation (no optimization) -----")
 
-    # correlation prune on basic.pruned_trees, using SHAP importance as order
+
     corr_pruned_trees_B = correlation_prune(
         basic.pruned_trees,
         workflow,
@@ -377,9 +362,6 @@ def run_methods_for_dataset(X, y, dataset_name):
     }
     append_to_csv(row_B)
 
-    # ========================================================
-    # METHOD C: Correlation -> SHAP
-    # ========================================================
     print("\n----- METHOD C: Correlation -> SHAP -----")
 
     
@@ -392,16 +374,16 @@ def run_methods_for_dataset(X, y, dataset_name):
     )
     corr_stage1_size = len(corr_pruned_trees_C_stage1)
 
-    # Step 2: SHAP pruning on this corr-pruned subset
+
     shap_pruned_trees_C, _ = shap_prune_on_subset(
         corr_pruned_trees_C_stage1,
         workflow,
         data_type=task,
-        keep_ratio=0.3,  # same keep_ratio as BasicMetaModel
+        keep_ratio=0.3,
     )
     final_size_C = len(shap_pruned_trees_C)
 
-    # Evaluate final subset
+
     final_metrics_C = evaluate_subset(shap_pruned_trees_C, workflow, task)
 
     row_C = {
@@ -430,12 +412,10 @@ def run_methods_for_dataset(X, y, dataset_name):
     append_to_csv(row_C)
 
 
-# ============================================================
-#                   MAIN
-# ============================================================
+
 
 def main():
-    # Regression datasets
+
     for ds in ["slice", "3droad", "kin40k"]:
         data = Dataset(ds)
         X = data.x.astype(np.float32)
@@ -455,7 +435,7 @@ def main():
         if ds == "higgs":
             import kagglehub
             import kagglehub
-            from kagglehub import KaggleDatasetAdapter
+
 
             path = kagglehub.dataset_download("erikbiswas/higgs-uci-dataset")
             csv_file = None

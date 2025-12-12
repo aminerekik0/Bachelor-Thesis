@@ -1,15 +1,11 @@
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, f1_score, roc_auc_score
 import shap
-
 from sklearn.linear_model import LinearRegression, LogisticRegression
-
 from src.BaseMetaModel import BaseMetaModel
 
 
 class PrePruner(BaseMetaModel):
-    def __init__(self, keep_ratio=0.25,data_type="regression" , **kwargs):
+    def __init__(self, keep_ratio=0.25, data_type="regression", **kwargs):
         super().__init__(**kwargs)
 
         self.keep_ratio = keep_ratio

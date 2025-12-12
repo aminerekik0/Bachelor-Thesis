@@ -1,10 +1,7 @@
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import mean_squared_error, accuracy_score, f1_score, roc_auc_score, r2_score
-from sklearn.linear_model import LinearRegression, LogisticRegression
 from src.BaseMetaModel import BaseMetaModel
 
 class _TorchModel(nn.Module):
@@ -58,18 +55,17 @@ class MetaOptimizer(BaseMetaModel):
         """
         Calculates the pruning loss based on the selected mode.
         """
-        # ============================
+
         # 1. L1 (Lasso) Mode
-        # ============================
         if mode == "L1":
           
             if model_weights is None:
                 return torch.tensor(0.0)
             return torch.norm(model_weights, p=1)
 
-        # ============================
+
         # 2. SHAP Entropy Mode
-        # ============================
+
         else:
             abs_shap = torch.abs(shap_vals_t)
             sum_abs_shap_per_sample = torch.sum(abs_shap, dim=1, keepdim=True)
@@ -141,7 +137,7 @@ class MetaOptimizer(BaseMetaModel):
                 mode=self.mode
             )
 
-            # Normalize Pruning Loss based on mode
+            # Normalize Pruning Loss
             if self.mode == "SHAP":
                 num_trees = shap_vals_t.shape[1]
                 max_entropy = np.log(num_trees + self.epsilon)
@@ -156,7 +152,7 @@ class MetaOptimizer(BaseMetaModel):
             # Total Loss
             loss_total = loss_main_norm + self.λ_prune * loss_prune_norm + self.λ_div * loss_div_norm
 
-            # Logging
+
             if epoch == 0:
                 self.initial_main_loss = float(loss_main_norm.item())
                 self.initial_prune_loss = float(loss_prune_norm.item())
@@ -167,7 +163,7 @@ class MetaOptimizer(BaseMetaModel):
             loss_total.backward()
             opt.step()
 
-            # Tracking
+
             if epoch == self.epochs - 1:
                 self.final_main_loss = float(loss_main_norm.item())
                 self.final_prune_loss = float(loss_prune_norm.item())
@@ -195,7 +191,7 @@ class MetaOptimizer(BaseMetaModel):
         w_max = np.max(self.w_final)
         actual_threshold = prune_threshold * w_max
 
-        print(f"\n==================== {self.mode} WEIGHT PRUNING ====================")
+
 
         if w_max == 0:
             keep_idx_weights = []

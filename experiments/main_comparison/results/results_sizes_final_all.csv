@@ -1,73 +1,9 @@
 dataset,method,mean_size,std_size
-keggdirected,SHAP/Linear,12.3,4.405678154382138
-keggdirected,L1/Linear,27.7,4.517742799230607
-keggdirected,L1,82.2,32.064934118129734
-keggdirected,RE,12.3,4.405678154382138
-keggdirected,Individual Contribution,12.3,4.405678154382138
-keggdirected,RF,200.0,0.0
-keggdirected,MethodB_SHAP_then_Corr,4.6,1.8
-keggdirected,MethodC_Corr_then_SHAP,5.5,0.6708203932499369
-keggundirected,SHAP/Linear,15.8,3.1240998703626617
-keggundirected,L1/Linear,36.5,3.0083217912982647
-keggundirected,L1,99.6,17.304334717058612
-keggundirected,RE,15.8,3.1240998703626617
-keggundirected,Individual Contribution,15.8,3.1240998703626617
-keggundirected,RF,200.0,0.0
-keggundirected,MethodB_SHAP_then_Corr,3.6,2.154065922853802
-keggundirected,MethodC_Corr_then_SHAP,8.6,1.1135528725660042
-kin40k,SHAP/Linear,29.3,4.196427051671457
-kin40k,L1/Linear,39.7,2.72213151776324
-kin40k,L1,89.3,31.282742846496053
-kin40k,RE,29.3,4.196427051671457
-kin40k,Individual Contribution,29.3,4.196427051671457
+kin40k,SHAP/Linear,28.0,0.0
+kin40k,L1/Linear,40.0,0.0
+kin40k,L1,103.0,0.0
+kin40k,RE,28.0,0.0
+kin40k,Individual Contribution,28.0,0.0
 kin40k,RF,200.0,0.0
-kin40k,MethodB_SHAP_then_Corr,49.9,0.3
-kin40k,MethodC_Corr_then_SHAP,49.7,0.45825756949558394
-solar,SHAP/Linear,17.2,1.7776388834631178
-solar,L1/Linear,13.3,2.9681644159311658
-solar,L1,200.0,0.0
-solar,RE,17.2,1.7776388834631178
-solar,Individual Contribution,17.2,1.7776388834631178
-solar,RF,200.0,0.0
-solar,MethodB_SHAP_then_Corr,48.7,1.345362404707371
-solar,MethodC_Corr_then_SHAP,45.3,1.1874342087037917
-protein,SHAP/Linear,18.0,1.9493588689617927
-protein,L1/Linear,33.5,5.200961449578338
-protein,L1,107.6,7.748548251124206
-protein,RE,18.0,1.9493588689617927
-protein,Individual Contribution,18.0,1.9493588689617927
-protein,RF,200.0,0.0
-protein,MethodB_SHAP_then_Corr,49.3,0.6403124237432849
-protein,MethodC_Corr_then_SHAP,49.1,0.5385164807134504
-tamielectric,SHAP/Linear,17.6,4.862098312457287
-tamielectric,L1/Linear,35.8,5.491812087098393
-tamielectric,L1,49.8,13.407460609675494
-tamielectric,RE,17.6,4.862098312457287
-tamielectric,Individual Contribution,17.6,4.862098312457287
-tamielectric,RF,200.0,0.0
-tamielectric,MethodB_SHAP_then_Corr,49.9,0.3
-tamielectric,MethodC_Corr_then_SHAP,49.7,0.45825756949558394
-pol,SHAP/Linear,14.2,2.9597297173897483
-pol,L1/Linear,20.5,6.48459713474939
-pol,L1,114.1,16.32452143249535
-pol,RE,14.2,2.9597297173897483
-pol,Individual Contribution,14.2,2.9597297173897483
-pol,RF,200.0,0.0
-pol,MethodB_SHAP_then_Corr,40.8,3.5721142198983507
-pol,MethodC_Corr_then_SHAP,43.4,1.9078784028338913
-slice,SHAP/Linear,7.3,2.1470910553583886
-slice,L1/Linear,7.9,2.1656407827707715
-slice,L1,98.6,34.84881633570931
-slice,RE,7.3,2.1470910553583886
-slice,Individual Contribution,7.3,2.1470910553583886
-slice,RF,200.0,0.0
-slice,MethodB_SHAP_then_Corr,30.8,1.9390719429665317
-slice,MethodC_Corr_then_SHAP,41.1,0.8306623862918076
-3droad,SHAP/Linear,20.6,3.6932370625238775
-3droad,L1/Linear,33.9,4.805205510693585
-3droad,L1,104.1,13.367497896016292
-3droad,RE,20.6,3.6932370625238775
-3droad,Individual Contribution,20.6,3.6932370625238775
-3droad,RF,200.0,0.0
-3droad,MethodB_SHAP_then_Corr,49.8,0.4
-3droad,MethodC_Corr_then_SHAP,43.5,1.5652475842498528
+kin40k,MethodB_SHAP_then_Corr,50.0,0.0
+kin40k,MethodC_Corr_then_SHAP,50.0,0.0

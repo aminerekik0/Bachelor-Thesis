@@ -10,9 +10,7 @@ from src.PrePruner import PrePruner
 from src.MetaOptimizer import MetaOptimizer
 
 
-# ============================================================
-#                 DATASET-SPECIFIC CONFIG
-# ============================================================
+
 DATASET_CONFIG = {
     "slice": {
         "lambda_prune": [1.2],
@@ -45,7 +43,7 @@ DATASET_CONFIG = {
         "corr_threshold": 0.94,
     }
 }
-# ============================================================
+
 
 
 def append_to_csv(row, filename="results_2.0.csv"):
@@ -100,7 +98,7 @@ def run_linear_grid(
 
             final_metric, _ = model.evaluate()
 
-            # ================================
+
             if data_type == "regression":
                 final_r2  = model.r2
                 final_f1  = None
@@ -125,37 +123,36 @@ def run_linear_grid(
                 "prune_threshold": prune_threshold,
                 "corr_threshold": corr_threshold,
 
-                # ==== FULL METRICS ====
+
                 "full_metric": full_metrics["main"],
                 "full_r2":  full_metrics["r2"],
                 "full_f1":  full_metrics["f1"],
                 "full_auc": full_metrics["auc"],
 
-                # ==== PRE (SHAP) METRICS ====
+
                 "pre_pruned_metric": pre_metrics["main"],
                 "pre_r2":  pre_metrics["r2"],
                 "pre_f1":  pre_metrics["f1"],
                 "pre_auc": pre_metrics["auc"],
 
-                # ==== FINAL (LINEAR) METRICS ====
+
                 "final_pruned_metric": final_metric,
                 "final_r2":  final_r2,
                 "final_f1":  final_f1,
                 "final_auc": final_auc,
 
-                # ==== INITIAL LOSSES ====
+
                 "initial_main_loss": model.initial_main_loss,
                 "initial_prune_loss": model.initial_prune_loss,
                 "initial_div_loss": model.initial_div_loss,
                 "initial_total_loss": model.initial_total_loss,
 
-                # ==== FINAL LOSSES ====
+
                 "final_main_loss": model.final_main_loss,
                 "final_prune_loss": model.final_prune_loss,
                 "final_div_loss": model.final_div_loss,
                 "final_total_loss": model.final_total_loss,
 
-                # ==== SIZES ====
                 "full_size": full_size,
                 "shap_size": shap_size,
                 "pruned_weighted_size": pruned_based_weighted_size,
@@ -176,10 +173,10 @@ def process_dataset(X, y, dataset_name, data_type):
     workflow.train_base_trees()
     full_size = len(workflow.individual_trees)
 
-    # ---- FULL ENSEMBLE METRIC ----
+
     mse, rmse, mae, r2, acc, f1 = workflow._evaluate()
 
-    # Save full metrics
+
     full_metrics = {
         "main": rmse if data_type == "regression" else acc,
         "r2":   r2 if data_type == "regression" else None,
@@ -187,7 +184,6 @@ def process_dataset(X, y, dataset_name, data_type):
         "auc":  workflow.auc if data_type == "classification" else None
     }
 
-    # ---- BASIC STAGE (SHAP PRUNING) ----
     basic = PrePruner(data_type=data_type)
     basic.attach_to(workflow)
     basic.train()
@@ -202,7 +198,6 @@ def process_dataset(X, y, dataset_name, data_type):
 
     shap_size = len(basic.pruned_trees) if basic.pruned_trees else 0
 
-    # ---- LINEAR META (STAGE 2) ----
     run_linear_grid(
         pruned_trees=basic.pruned_trees,
         workflow=workflow,

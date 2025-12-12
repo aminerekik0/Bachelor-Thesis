@@ -10,9 +10,7 @@ from src.PrePruner import PrePruner
 from src.MetaOptimizer import MetaOptimizer
 
 
-# ============================================================
-#                 DATASET-SPECIFIC CONFIG
-# ============================================================
+
 DATASET_CONFIG = {
     "slice": {
         "lambda_prune": [1.5],
@@ -46,7 +44,7 @@ DATASET_CONFIG = {
     }
     
 }
-# ============================================================
+
 
 
 def append_to_csv(row, filename="results_3.0.csv"):
@@ -148,7 +146,7 @@ def run_linear_grid(
                 "prune_threshold": prune_threshold,
                 "corr_threshold": corr_threshold,
 
-                # ==== FULL METRICS ====
+
                 "full_metric": full_metrics["main"],
                 
                 "full_f1":  full_metrics["f1"],
@@ -156,7 +154,6 @@ def run_linear_grid(
 
                 
 
-                # ==== SIZES ====
                 "full_size": full_size,
                 "shap_size": shap_size,
                 "pruned_weighted_size": pruned_based_weighted_size,
@@ -177,10 +174,10 @@ def process_dataset(X, y, dataset_name, data_type):
     workflow.train_base_trees()
     full_size = len(workflow.individual_trees)
 
-    # ---- FULL ENSEMBLE METRIC ----
+
     mse, rmse, mae, r2, acc, f1 = workflow._evaluate()
 
-    # Save full metrics
+
     full_metrics = {
         "main": rmse if data_type == "regression" else acc,
         "r2":   r2 if data_type == "regression" else None,
@@ -188,7 +185,6 @@ def process_dataset(X, y, dataset_name, data_type):
         "auc":  workflow.auc if data_type == "classification" else None
     }
 
-    # ---- BASIC STAGE (SHAP PRUNING) ----
     basic = PrePruner(data_type=data_type)
     basic.attach_to(workflow)
     basic.train()
@@ -198,7 +194,6 @@ def process_dataset(X, y, dataset_name, data_type):
 
     shap_size = len(basic.pruned_trees) if basic.pruned_trees else 0
 
-    # ---- LINEAR META (STAGE 2) ----
     run_linear_grid(
         pruned_trees=basic.pruned_trees,
         workflow=workflow,
